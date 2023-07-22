@@ -1,0 +1,472 @@
+List of attributes:
+https://www.home-assistant.io/integrations/sensor.mqtt/
+
+Device classes by device types:
+https://www.home-assistant.io/integrations/sensor/#device-class
+https://www.home-assistant.io/integrations/binary_sensor/#device-class
+
+All MQTT integrations:
+https://www.home-assistant.io/integrations#search/MQTT
+
+Other:
+https://www.home-assistant.io/integrations#search/MQTT
+
+
+Assume a sensor device with 3 buttons: button1, button2, button3
+Button states: ON, OFF
+device MAC address 123456789ABC.
+device unique identifier: buttonssensor123456789ABC
+
+export MQTT_USER=antoine;
+export MQTT_PASS=antoine;
+history -c && history -w;
+
+
+==========================================================================================================================================================================================================================================
+Sensor with multiple measurement values example:
+==========================================================================================================================================================================================================================================
+
+mosquitto_pub -u "$MQTT_USER" -P "$MQTT_PASS" -t 'my_sensor_bedroom/state' -m '{"temperature":23.20,"humidity":43.70}'
+
+DISCOVERY_JSON_PAYLOAD='{
+	"device_class":"temperature",
+	"name":"Temperature",
+	"state_topic":"my_sensor_bedroom/state",
+	"unit_of_measurement":"°C",
+	"value_template":"{{ value_json.temperature}}",
+	"unique_id":"temp01ae",
+	"device":{
+		"identifiers":[
+			"bedroom01ae"
+		],
+		"name":"Bedroom"
+	}
+}'
+mosquitto_pub -r -u "$MQTT_USER" -P "$MQTT_PASS" -t 'homeassistant/sensor/sensorBedroomT/config' -m "$DISCOVERY_JSON_PAYLOAD"
+
+DISCOVERY_JSON_PAYLOAD='{
+	"device_class":"humidity",
+	"name":"Humidity",
+	"state_topic":"my_sensor_bedroom/state",
+	"unit_of_measurement":"%",
+	"value_template":"{{ value_json.humidity}}",
+	"unique_id":"hum01ae",
+	"device":{
+		"identifiers":[
+			"bedroom01ae"
+		],
+		"name":"Bedroom"
+	}
+}'
+mosquitto_pub -r -u "$MQTT_USER" -P "$MQTT_PASS" -t 'homeassistant/sensor/sensorBedroomH/config' -m "$DISCOVERY_JSON_PAYLOAD"
+
+==========================================================================================================================================================================================================================================
+Switch:
+==========================================================================================================================================================================================================================================
+
+mosquitto_pub -u "$MQTT_USER" -P "$MQTT_PASS" -t 'my_garden_irrigation_switch/set' -m 'ON'
+mosquitto_pub -u "$MQTT_USER" -P "$MQTT_PASS" -t 'my_garden_irrigation_switch/state' -m 'ON'
+
+DISCOVERY_JSON_PAYLOAD='{
+	"name":"Irrigation",
+	"command_topic":"my_garden_irrigation_switch/set",
+	"state_topic":"my_garden_irrigation_switch/state",
+	"unique_id":"irr01ad",
+	"device":{
+		"identifiers":[
+			"garden01ad"
+		],
+		"name":"Garden"
+	}
+}'
+mosquitto_pub -r -u "$MQTT_USER" -P "$MQTT_PASS" -t 'homeassistant/switch/irrigation/config' -m "$DISCOVERY_JSON_PAYLOAD"
+
+==========================================================================================================================================================================================================================================
+Binary snesor:
+==========================================================================================================================================================================================================================================
+
+mosquitto_pub -u "$MQTT_USER" -P "$MQTT_PASS" -t 'my_garden_motion_sensor/state' -m 'ON'
+
+DISCOVERY_JSON_PAYLOAD='{
+	"name":"garden",
+	"device_class":"motion",
+	"state_topic":"my_garden_motion_sensor/state",
+	"unique_id":"motion01ad",
+	"device":{
+		"identifiers":[
+			"01ad"
+		],
+		"name":"Garden"
+	}
+}'
+mosquitto_pub -r -u "$MQTT_USER" -P "$MQTT_PASS" -t 'homeassistant/binary_sensor/garden/config' -m "$DISCOVERY_JSON_PAYLOAD"
+
+==========================================================================================================================================================================================================================================
+Light:
+==========================================================================================================================================================================================================================================
+
+mosquitto_pub -u "$MQTT_USER" -P "$MQTT_PASS" -t 'my_kitchen_light/set' -m 'ON'
+mosquitto_pub -u "$MQTT_USER" -P "$MQTT_PASS" -t 'my_kitchen_light/state' -m '{"state":"ON","brightness":255}'
+
+DISCOVERY_JSON_PAYLOAD='{
+	"~":"my_kitchen_light",
+	"name":"Kitchen",
+	"unique_id":"kitchen_light",
+	"cmd_t":"~/set",
+	"stat_t":"~/state",
+	"schema":"json",
+	"brightness":true,
+	"device":{
+		"identifiers":[
+			"light01ad"
+		],
+		"name":"My Kitchen light device"
+	}	
+}'
+mosquitto_pub -r -u "$MQTT_USER" -P "$MQTT_PASS" -t 'homeassistant/light/kitchen/config' -m "$DISCOVERY_JSON_PAYLOAD"
+
+==========================================================================================================================================================================================================================================
+Thermopompe v1 :
+==========================================================================================================================================================================================================================================
+
+https://community.home-assistant.io/t/mqtt-thermostat-discovery-not-completely-working/261876
+https://www.home-assistant.io/integrations/climate.mqtt/
+
+# sed -i 's/$(printf '\r\n')/,/g' /tmp/DEVICE_STATE_JSON_PAYLOAD
+# sed -i -e 's/\r\n)/,/g' /tmp/DEVICE_STATE_JSON_PAYLOAD
+# sed -i -e 's/    /!/g' /tmp/DEVICE_STATE_JSON_PAYLOAD
+# cat /tmp/DEVICE_STATE_JSON_PAYLOAD
+# sed -e 's/    /\t/g' /tmp/DEVICE_STATE_JSON_PAYLOAD
+# DEVICE_STATE_JSON_PAYLOAD=${DEVICE_STATE_JSON_PAYLOAD//$'\t'/0}
+# #DEVICE_STATE_JSON_PAYLOAD=${DEVICE_STATE_JSON_PAYLOAD//$'\r\n'/z}
+# DEVICE_STATE_JSON_PAYLOAD='${DEVICE_STATE_JSON_PAYLOAD//$' '/y}"
+
+DEVICE_STATE_JSON_PAYLOAD='{
+	"mode":"heat",
+	"setpoint":35,
+	"temperature": 10,
+	"swing":"on",
+	"fan":"medium"
+}'
+echo $DEVICE_STATE_JSON_PAYLOAD>/tmp/DEVICE_STATE_JSON_PAYLOAD
+sed -i 's/\s//g' /tmp/DEVICE_STATE_JSON_PAYLOAD
+DEVICE_STATE_JSON_PAYLOAD=`cat /tmp/DEVICE_STATE_JSON_PAYLOAD`
+mosquitto_pub -u "$MQTT_USER" -P "$MQTT_PASS" -t 'my_kitchen_heatpump/json/state' -m "$DEVICE_STATE_JSON_PAYLOAD"
+mosquitto_pub -u "$MQTT_USER" -P "$MQTT_PASS" -t 'my_kitchen_heatpump/power/set' -m "on"
+mosquitto_pub -u "$MQTT_USER" -P "$MQTT_PASS" -t 'my_kitchen_heatpump/mode/set' -m "heat"
+mosquitto_pub -u "$MQTT_USER" -P "$MQTT_PASS" -t 'my_kitchen_heatpump/temperature/set' -m "22"
+mosquitto_pub -u "$MQTT_USER" -P "$MQTT_PASS" -t 'my_kitchen_heatpump/swing/set' -m "on"
+mosquitto_pub -u "$MQTT_USER" -P "$MQTT_PASS" -t 'my_kitchen_heatpump/fan/set' -m "medium"
+
+
+DISCOVERY_JSON_PAYLOAD='{
+	"unique_id":"HeatPump1_unique_id",
+	"name":"Thermopompe 1",
+	"qos":1,
+	"retain":true,
+	"modes":[
+		"auto",
+		"off",
+		"cool",
+		"heat",
+		"dry",
+		"fan_only"
+	],
+	"fan_modes":[
+		"auto",
+		"low",
+		"medium",
+		"high"
+	],
+	"swing_modes": [
+		"on",
+		"off"
+	],
+	"power_command_topic": "my_kitchen_heatpump/power/set",
+	"mode_command_topic": "my_kitchen_heatpump/mode/set",
+ 	"mode_command_template": "{{ value if value==\"off\" else \"on\" }}",
+	"mode_state_topic":"my_kitchen_heatpump/json/state",
+	"mode_state_template":"{{ value_json.mode }}",
+	"temperature_command_topic": "my_kitchen_heatpump/temperature/set",
+	"temperature_state_topic":"my_kitchen_heatpump/json/state",
+	"temperature_state_template":"{{ value_json.setpoint }}",
+	"current_temperature_topic":"my_kitchen_heatpump/json/state",
+	"current_temperature_template":"{{ value_json.temperature }}",
+	"swing_mode_command_topic": "my_kitchen_heatpump/swing/set",
+	"swing_mode_state_topic":"my_kitchen_heatpump/json/state",
+	"swing_mode_state_template":"{{ value_json.swing }}",
+	"fan_mode_command_topic": "my_kitchen_heatpump/fan/set",
+	"fan_mode_state_topic":"my_kitchen_heatpump/json/state",
+	"fan_mode_state_template":"{{ value_json.fan }}",
+	"temperature_unit":"C",
+	"precision":1.0,
+	"max_temp":50,
+	"min_temp":10
+}'
+mosquitto_pub -r -u "$MQTT_USER" -P "$MQTT_PASS" -t 'homeassistant/climate/HeatPump1/config' -m "$DISCOVERY_JSON_PAYLOAD"
+
+==========================================================================================================================================================================================================================================
+Thermopompe v2 :
+==========================================================================================================================================================================================================================================
+
+https://community.home-assistant.io/t/mqtt-thermostat-discovery-not-completely-working/261876
+https://www.home-assistant.io/integrations/climate.mqtt/
+
+DEVICE_STATE_JSON_PAYLOAD='{
+	"mode":"heat",
+	"setpoint":12,
+	"temperature": 10,
+	"swing":"off",
+	"fan":"low"
+}'
+echo $DEVICE_STATE_JSON_PAYLOAD>/tmp/DEVICE_STATE_JSON_PAYLOAD
+sed -i 's/\s//g' /tmp/DEVICE_STATE_JSON_PAYLOAD
+DEVICE_STATE_JSON_PAYLOAD=`cat /tmp/DEVICE_STATE_JSON_PAYLOAD`
+mosquitto_pub -u "$MQTT_USER" -P "$MQTT_PASS" -t 'my_bathroom_heatpump/json/state' -m "$DEVICE_STATE_JSON_PAYLOAD"
+
+
+DISCOVERY_JSON_PAYLOAD='{
+	"~":"my_bathroom_heatpump",
+	"name":"Thermopompe 2",
+	"unique_id":"HeatPump2",
+	"qos":1,
+	"retain":false,
+	"modes":[
+		"auto",
+		"off",
+		"cool",
+		"heat",
+		"dry",
+		"fan_only"
+	],
+	"fan_modes":[
+		"auto",
+		"low",
+		"medium",
+		"high"
+	],
+	"swing_modes": [
+		"on",
+		"off"
+	],
+	"power_command_topic": "~/power/set",
+	"mode_command_topic": "~/mode/set",
+ 	"mode_command_template": "{{ value if value==\"off\" else \"on\" }}",
+	"mode_state_topic":"~/json/state",
+	"mode_state_template":"{{ value_json.mode }}",
+	"temperature_command_topic": "~/temperature/set",
+	"temperature_state_topic":"~/json/state",
+	"temperature_state_template":"{{ value_json.setpoint }}",
+	"current_temperature_topic":"~/json/state",
+	"current_temperature_template":"{{ value_json.temperature }}",
+	"swing_mode_command_topic": "~/swing/set",
+	"swing_mode_state_topic":"~/json/state",
+	"swing_mode_state_template":"{{ value_json.swing }}",
+	"fan_mode_command_topic": "~/fan/set",
+	"fan_mode_state_topic":"~/json/state",
+	"fan_mode_state_template":"{{ value_json.fan }}",
+	"temperature_unit":"C",
+	"precision":1.0,
+	"max_temp":50,
+	"min_temp":10,
+	"device":{
+		"identifiers":[
+			"HeatPump2"
+		],
+		"name":"My ACME heatpump 2",
+		"hw_version":"1.0",
+		"sw_version":"2.0",
+		"manufacturer":"end2endzone",
+		"model":"ACME Themostat"
+	}
+}'
+
+mosquitto_pub -r -u "$MQTT_USER" -P "$MQTT_PASS" -t 'homeassistant/climate/HeatPump2/config' -m "$DISCOVERY_JSON_PAYLOAD"
+
+==========================================================================================================================================================================================================================================
+Thermopompe v3 :
+==========================================================================================================================================================================================================================================
+
+https://community.home-assistant.io/t/mqtt-thermostat-discovery-not-completely-working/261876
+https://www.home-assistant.io/integrations/climate.mqtt/
+
+DEVICE_STATE_JSON_PAYLOAD='{
+	"mode":"heat",
+	"setpoint":40,
+	"temperature": 12,
+	"swing":"off",
+	"fan":"low"
+}'
+echo $DEVICE_STATE_JSON_PAYLOAD>/tmp/DEVICE_STATE_JSON_PAYLOAD
+sed -i 's/\s//g' /tmp/DEVICE_STATE_JSON_PAYLOAD
+DEVICE_STATE_JSON_PAYLOAD=`cat /tmp/DEVICE_STATE_JSON_PAYLOAD`
+mosquitto_pub -u "$MQTT_USER" -P "$MQTT_PASS" -t 'my_heatpump3_device/json/state' -m "$DEVICE_STATE_JSON_PAYLOAD"
+
+
+DISCOVERY_JSON_PAYLOAD='{
+	"~":"my_heatpump3_device",
+	"name":"Thermopompe 3",
+	"object_id":"heatpump3",
+	"unique_id":"heatpump3",
+	"qos":1,
+	"retain":false,
+	"modes":[
+		"auto",
+		"off",
+		"cool",
+		"heat",
+		"dry",
+		"fan_only"
+	],
+	"fan_modes":[
+		"auto",
+		"low",
+		"medium",
+		"high"
+	],
+	"swing_modes": [
+		"on",
+		"off"
+	],
+	"power_command_topic": "~/power/set",
+	"mode_command_topic": "~/mode/set",
+ 	"mode_command_template": "{{ value if value==\"off\" else \"on\" }}",
+	"mode_state_topic":"~/json/state",
+	"mode_state_template":"{{ value_json.mode }}",
+	"temperature_command_topic": "~/temperature/set",
+	"temperature_state_topic":"~/json/state",
+	"temperature_state_template":"{{ value_json.setpoint }}",
+	"current_temperature_topic":"~/json/state",
+	"current_temperature_template":"{{ value_json.temperature }}",
+	"swing_mode_command_topic": "~/swing/set",
+	"swing_mode_state_topic":"~/json/state",
+	"swing_mode_state_template":"{{ value_json.swing }}",
+	"fan_mode_command_topic": "~/fan/set",
+	"fan_mode_state_topic":"~/json/state",
+	"fan_mode_state_template":"{{ value_json.fan }}",
+	"temperature_unit":"C",
+	"precision":1.0,
+	"max_temp":50,
+	"min_temp":10,
+	"device":{
+		"identifiers":[
+			"HeatPump3"
+		],
+		"name":"My ACME heatpump 3",
+		"hw_version":"1.0",
+		"sw_version":"2.0",
+		"manufacturer":"end2endzone",
+		"model":"ACME Themostat"
+	}
+}'
+
+mosquitto_pub -r -u "$MQTT_USER" -P "$MQTT_PASS" -t 'homeassistant/climate/HeatPump3/config' -m "$DISCOVERY_JSON_PAYLOAD"
+
+==========================================================================================================================================================================================================================================
+My reboot button:
+==========================================================================================================================================================================================================================================
+
+DISCOVERY_JSON_PAYLOAD='{
+	"~":"my_reboot_button",
+	"name":"My reboot button",
+	"unique_id":"bedroom_switch_reboot_btn",
+	"qos":1,
+	"retain":false,
+
+	"command_topic": "~/set",
+
+	"entity_category": "config",
+	"device_class": "restart",
+
+	"payload_press": "restart",
+
+	"device":{
+		"identifiers":[
+			"HappyButton"
+		],
+		"name":"My Reboot button device",
+		"hw_version":"1.0",
+		"sw_version":"2.0",
+		"manufacturer":"end2endzone",
+		"model":"ACME Button"
+	}
+}'
+mosquitto_pub -r -u "$MQTT_USER" -P "$MQTT_PASS" -t 'homeassistant/button/reboot/config' -m "$DISCOVERY_JSON_PAYLOAD"
+
+
+==========================================================================================================================================================================================================================================
+Amazon order buttons :
+==========================================================================================================================================================================================================================================
+
+https://www.home-assistant.io/integrations/switch.mqtt/
+https://www.home-assistant.io/integrations/switch/
+
+
+mosquitto_pub -u "$MQTT_USER" -P "$MQTT_PASS" -t 'my_amazon-order_device/button0/state' -m 'ON'
+mosquitto_pub -u "$MQTT_USER" -P "$MQTT_PASS" -t 'my_amazon-order_device/button1/state' -m 'ON'
+mosquitto_pub -u "$MQTT_USER" -P "$MQTT_PASS" -t 'my_amazon-order_device/button2/state' -m 'ON'
+mosquitto_pub -u "$MQTT_USER" -P "$MQTT_PASS" -t 'my_amazon-order_device/button0/state' -m 'OFF'
+mosquitto_pub -u "$MQTT_USER" -P "$MQTT_PASS" -t 'my_amazon-order_device/button1/state' -m 'OFF'
+mosquitto_pub -u "$MQTT_USER" -P "$MQTT_PASS" -t 'my_amazon-order_device/button2/state' -m 'OFF'
+
+
+DISCOVERY_JSON_PAYLOAD='{
+	"~":"my_amazon-order_device/button0",
+	"name":"Champoing",
+	"object_id":"amazon_order_button0",
+	"unique_id":"amazon_order_button0",
+	"qos":1,
+	"retain":false,
+	"state_topic": "~/state",
+	"device":{
+		"identifiers":[
+			"AmazonOrderButton"
+		],
+		"name":"My Amazon-Order device",
+		"hw_version":"1.0",
+		"sw_version":"2.0",
+		"manufacturer":"end2endzone",
+		"model":"ACME Buttons"
+	}
+}'
+mosquitto_pub -r -u "$MQTT_USER" -P "$MQTT_PASS" -t 'homeassistant/binary_sensor/amazon-order-0/config' -m "$DISCOVERY_JSON_PAYLOAD"
+DISCOVERY_JSON_PAYLOAD='{
+	"~":"my_amazon-order_device/button1",
+	"name":"Mouchoir",
+	"object_id":"amazon_order_button1",
+	"unique_id":"amazon_order_button1",
+	"qos":1,
+	"retain":false,
+	"state_topic": "~/state",
+	"device":{
+		"identifiers":[
+			"AmazonOrderButton"
+		],
+		"name":"My Amazon-Order device",
+		"hw_version":"1.0",
+		"sw_version":"2.0",
+		"manufacturer":"end2endzone",
+		"model":"ACME Buttons"
+	}
+}'
+mosquitto_pub -r -u "$MQTT_USER" -P "$MQTT_PASS" -t 'homeassistant/binary_sensor/amazon-order-1/config' -m "$DISCOVERY_JSON_PAYLOAD"
+DISCOVERY_JSON_PAYLOAD='{
+	"~":"my_amazon-order_device/button2",
+	"name":"Breath Right",
+	"object_id":"amazon_order_button2",
+	"unique_id":"amazon_order_button2",
+	"qos":1,
+	"retain":false,
+	"state_topic": "~/state",
+	"device":{
+		"identifiers":[
+			"AmazonOrderButton"
+		],
+		"name":"My Amazon-Order device",
+		"hw_version":"1.0",
+		"sw_version":"2.0",
+		"manufacturer":"end2endzone",
+		"model":"ACME Buttons"
+	}
+}'
+mosquitto_pub -r -u "$MQTT_USER" -P "$MQTT_PASS" -t 'homeassistant/binary_sensor/amazon-order-2/config' -m "$DISCOVERY_JSON_PAYLOAD"
