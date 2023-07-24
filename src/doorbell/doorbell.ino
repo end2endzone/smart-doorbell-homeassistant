@@ -6,49 +6,24 @@
 #include <strings.h>  // for strcasecmp
 #include <cctype>     //for isprint
 #include "arduino_secrets.h"
+#include "HaMqttDiscovery/HaMqttEntity.hpp"
+#include "HaMqttDiscovery/HaMqttDevice.hpp"
 
-struct HA_MQTT_DEVICE {
-  String * identifiers; // an array of 'identifiers_count' elements of string identifiers
-  uint16_t identifiers_count;
-  String name;
-  String manufacturer;
-  String model;
-  String hw_version;
-  String sw_version;
-};
-
-struct HA_MQTT_ENTITY {
-  String name;
-  String unique_id;
-  String object_id;
-  String command_topic;
-  String state_topic;
-  String more_json;
-  HA_MQTT_DEVICE * device;
-};
-
-struct HA_MQTT_DISCOVERY {
-  HA_MQTT_ENTITY * entity;	// the entity for Home Assistant to discover
-  String topic;  // topic where Home Assistant will discover the associated entity
-  String payload;
-};
-
-struct HA_MQTT_STATE {
+struct MQTT_STATE {
   String payload; // payload of the mqtt state topic, if is_dirty is set
-  bool is_dirty;  // true if the state has changed and the mqtt payload must be publshed to topic
+  bool is_dirty;  // true if the state has changed and the mqtt payload must be published to topic
 };
 
-struct HA_LIGHT_STATE {
+struct LIGHT_STATE {
   bool is_on;
   uint8_t brightness;
+  MQTT_STATE mqtt;
 };
 
 struct SMART_LED {
   uint8_t pin;
-  HA_MQTT_ENTITY entity;
-  HA_LIGHT_STATE state;
-  HA_MQTT_STATE mqtt;
-  HA_MQTT_DISCOVERY discovery;
+  HaMqttEntity entity;
+  LIGHT_STATE state;
 };
 
 
@@ -56,19 +31,23 @@ struct SMART_LED {
 //   Predeclarations
 //************************************************************
 
+void led_turn_on(size_t led_index, uint8_t brightness);
+void led_turn_off(size_t led_index);
+void setup();
+void setup_wifi();
+void setup_device_identifier();
+void setup_led(size_t led_index);
+void setup_mqtt();
+size_t print_cstr_without_terminating_null(const char* str, size_t length, size_t max_chunk_size);
 void mqtt_subscription_callback(const char* topic, const byte* payload, unsigned int length);
-
-void build_ha_mqtt_device_json(String & s, HA_MQTT_DEVICE * device);
-void build_ha_mqtt_entity_discovery_payload(String & s, HA_MQTT_ENTITY * device);
-
-void publish_ha_mqtt_discovery(HA_MQTT_DISCOVERY * discovery);
-void mqtt_entity_subscribe(HA_MQTT_ENTITY * entity);
-
+void mqtt_reconnect();
+void show_error(uint16_t err);
 bool is_empty(const char * s);
-bool is_empty(const String & s) { return is_empty(s.c_str()); }
-bool is_empty(const String * s) { return is_empty(s->c_str()); }
 bool parse_boolean(const char * value);
 uint8_t parse_uint8(const char * value);
+void publish_entity_discovery(HaMqttEntity * entity);
+void subscribe_to_entity_command_topic(HaMqttEntity * entity);
+
 
 //************************************************************
 //   Variables
@@ -86,14 +65,12 @@ static const uint8_t LED1_PIN = 16;
 WiFiClient wifi_client;
 SoftTimer publish_timer; //millisecond timer
 
-static const String home_assistant_discovery_prefix = "homeassistant";
 static const char * device_identifier_prefix = "doorbell";
-String device_identifier_prefix_str = device_identifier_prefix;
 String device_identifier; // defined as device_identifier_prefix followed by device mac address without ':' characters.
 
 // MQTT variables
 PubSubClient mqtt_client(wifi_client);
-HA_MQTT_DEVICE this_device;
+HaMqttDevice this_device;
 
 SMART_LED led0;
 SMART_LED led1;
@@ -127,9 +104,8 @@ void led_turn_on(size_t led_index, uint8_t brightness = 255) {
   
   led.state.is_on = true;
   led.state.brightness = brightness;
-  
-  led.mqtt.is_dirty = true;
-  led.mqtt.payload = "{\"state\":\"ON\",\"brightness\":" + String(led.state.brightness) + "}";
+  led.state.mqtt.is_dirty = true;
+  led.state.mqtt.payload = "{\"state\":\"ON\",\"brightness\":" + String(led.state.brightness) + "}";
 }
 
 void led_turn_off(size_t led_index) {
@@ -138,12 +114,12 @@ void led_turn_off(size_t led_index) {
   // Turn the LED off by making the voltage HIGH
   digitalWrite(led.pin, HIGH); // OFF
   led.state.is_on = false;
-  led.mqtt.is_dirty = true;
-  led.mqtt.payload = "{\"state\":\"OFF\",\"brightness\":" + String(led.state.brightness) + "}";
+  led.state.mqtt.is_dirty = true;
+  led.state.mqtt.payload = "{\"state\":\"OFF\",\"brightness\":" + String(led.state.brightness) + "}";
 
-    Serial.print("Set LED-");
-    Serial.print(led_index);
-    Serial.println(" off");
+  Serial.print("Set LED-");
+  Serial.print(led_index);
+  Serial.println(" off");
 }
 
 void setup_wifi() {
@@ -199,16 +175,14 @@ void setup_led(size_t led_index) {
   String led_index_str = String(led_index);
 
   // Configure the LED-0 entity attributes
-  led.entity.name = "LED " + led_index_str;
-  led.entity.unique_id     = device_identifier + "_led" + led_index_str;
-  led.entity.command_topic = device_identifier + "/led" + led_index_str + "/set";
-  led.entity.state_topic   = device_identifier + "/led" + led_index_str + "/state";
-  led.entity.more_json = ",\"schema\":\"json\",\"brightness\":\"true\"";
-  led.entity.device = &this_device;
-
-  led.discovery.entity = &led.entity;
-  led.discovery.topic = home_assistant_discovery_prefix + "/light/" + device_identifier + "_led" + led_index_str + "/config";
-  build_ha_mqtt_entity_discovery_payload(&led.discovery.payload, led.discovery.entity);
+  static const String NAME_PREFIX = "LED ";
+  led.entity.setIntegrationType(HA_MQTT_LIGHT);
+  led.entity.setName(NAME_PREFIX + led_index_str);
+  led.entity.setCommandTopic( device_identifier + "/led" + led_index_str + "/set");
+  led.entity.setStateTopic(   device_identifier + "/led" + led_index_str + "/state");
+  led.entity.addKeyValue("schema","json");
+  led.entity.addKeyValue("brightness","true");
+  led.entity.setDevice(&this_device); // this also adds the entity to the device and generates a unique_id based on the first identifier of the device.
 }
 
 void setup_mqtt() {
@@ -225,14 +199,12 @@ void setup_mqtt() {
   Serial.println(mqtt_client.getBufferSize());
 
   // Configure this device attributes
-  this_device.identifiers = new String();
-  *this_device.identifiers = device_identifier;
-  this_device.identifiers_count = 1;
-  this_device.name = "Smart doorbell";
-  this_device.manufacturer = "end2endzone";
-  this_device.model = "ESP8266";
-  this_device.hw_version = "2.2";
-  this_device.sw_version = "0.1";
+  this_device.addIdentifier(device_identifier);
+  this_device.setName("Smart doorbell");
+  this_device.setManufacturer("end2endzone");
+  this_device.setModel("ESP8266");
+  this_device.setHardwareVersion("2.2");
+  this_device.setSoftwareVersion("0.1");
 
   setup_led(0);
   setup_led(1);
@@ -298,7 +270,7 @@ void mqtt_subscription_callback(const char* topic, const byte* payload, unsigned
   for(size_t i=0; i<leds_count; i++) {
     SMART_LED & led = *leds[i];
 
-    if (led.entity.command_topic == topic) {
+    if (led.entity.getCommandTopic() == topic) {
       String json = (const char *)payload;
 
       // Parse json
@@ -357,10 +329,10 @@ void mqtt_reconnect() {
         SMART_LED & led = *leds[i];
 
         // Publish Home Assistant mqtt discovery topic
-        publish_ha_mqtt_discovery(&led.discovery);
+        publish_entity_discovery(&led.entity);
     
         // Subscribe to receive entity state change notifications
-        mqtt_entity_subscribe(&led.entity);
+        subscribe_to_entity_command_topic(&led.entity);
       }
     }
     
@@ -412,13 +384,15 @@ bool parse_boolean(const char * value) {
     return true;
   else if (strcmp("on", value) == 0)
     return true;
+  else if (strcmp("TRUE", value) == 0)
+    return true;
+  else if (strcmp("true", value) == 0)
+    return true;
   else if (strcmp("YES", value) == 0)
     return true;
   else if (strcmp("yes", value) == 0)
     return true;
-  else if (strcmp("O", value) == 0)
-    return true;
-  else if (strcmp("o", value) == 0)
+  else if (strcmp("1", value) == 0)
     return true;
   return false;
 }
@@ -430,106 +404,20 @@ uint8_t parse_uint8(const char * value) {
   return numeric_value;
 }
 
-void append_json_key_value_pair(String * s, const char * key, const String & value, bool is_first = false) {
-  if (!is_first)
-    *s += ",";
-  *s += "\"";
-  *s += key;
-  *s += "\":";
-  *s += "\"";
-  *s += value;
-  *s += "\"";  
-}
-void append_json_key_value_pair(String * s, const char * key, const char * value, bool is_first = false) {
-  if (!is_first)
-    *s += ",";
-  *s += "\"";
-  *s += key;
-  *s += "\":";
-  *s += "\"";
-  *s += value;
-  *s += "\"";
-}
-
-void build_ha_mqtt_device_json(String * s, HA_MQTT_DEVICE * dev) {
-  s->clear();
-  s->reserve(200);
-
-  if (dev->identifiers == NULL ||
-      dev->identifiers_count < 1 ||
-      dev->name == NULL)
-    return;
-
-  *s += "{\"identifiers\":[";
-  for(uint16_t i=0; i<dev->identifiers_count; i++) {
-    *s += "\"";
-    *s += dev->identifiers[i];
-    *s += "\"";
-    if (i+1 < dev->identifiers_count)
-      *s += ",";
-  }
-  *s += "]";
-
-  if (!is_empty(dev->name))
-    append_json_key_value_pair(s, "name", dev->name);
-  if (!is_empty(dev->manufacturer))
-    append_json_key_value_pair(s, "manufacturer", dev->manufacturer);
-  if (!is_empty(dev->model))
-    append_json_key_value_pair(s, "model", dev->model);
-  if (!is_empty(dev->hw_version))
-    append_json_key_value_pair(s, "hw_version", dev->hw_version);
-  if (!is_empty(dev->sw_version))
-    append_json_key_value_pair(s, "sw_version", dev->sw_version);
-
-  *s += "}";
-}
-
-void build_ha_mqtt_entity_discovery_payload(String * s, HA_MQTT_ENTITY * entity) {
-  s->clear();
-  s->reserve(512);
-
-  if (entity->name == NULL ||
-      entity->unique_id == NULL)
-    return;
-
-  *s += "{";
-  
-  append_json_key_value_pair(s, "name", entity->name, true);
-
-  if (!is_empty(entity->unique_id))
-    append_json_key_value_pair(s, "unique_id", entity->unique_id);
-  if (!is_empty(entity->object_id))
-    append_json_key_value_pair(s, "object_id", entity->object_id);
-  if (!is_empty(entity->command_topic))
-    append_json_key_value_pair(s, "cmd_t", entity->command_topic);
-  if (!is_empty(entity->state_topic))
-    append_json_key_value_pair(s, "stat_t", entity->state_topic);
-  if (!is_empty(entity->more_json))
-    *s += entity->more_json;
-
-  if (entity->device) {
-    String device_json;
-    build_ha_mqtt_device_json(&device_json, entity->device);
-    *s += ",\"device\":";
-    *s += device_json;
-  }
-
-  *s += "}";
-}
-
-void publish_ha_mqtt_discovery(HA_MQTT_DISCOVERY * discovery) {
+void publish_entity_discovery(HaMqttEntity * entity) {
   if (!mqtt_client.connected())
     return;
-  if (discovery == NULL || discovery->entity == NULL)
-    return;
 
-  const char * topic = discovery->topic.c_str();
-  const char * payload = discovery->payload.c_str();
-  if (is_empty(topic) || is_empty(payload))
+  String topic;
+  String payload;
+  entity->getDiscoveryTopic(topic);
+  entity->getDiscoveryPayload(payload);
+
+  if (topic.isEmpty() || payload.isEmpty())
     return;
 
   static const bool retained = true;
-  mqtt_client.publish(topic, payload, retained);
+  mqtt_client.publish(topic.c_str(), payload.c_str(), retained);
 
   Serial.print("MQTT publish: topic=");
   Serial.print(topic);
@@ -537,11 +425,8 @@ void publish_ha_mqtt_discovery(HA_MQTT_DISCOVERY * discovery) {
   Serial.println(payload);
 }
 
-void mqtt_entity_subscribe(HA_MQTT_ENTITY * entity) {
-  if (entity == NULL)
-    return;
-
-  const char * topic = entity->command_topic.c_str();
+void subscribe_to_entity_command_topic(HaMqttEntity * entity) {
+  const char * topic = entity->getCommandTopic().c_str();
   if (is_empty(topic))
     return;
 
@@ -554,6 +439,9 @@ void setup() {
   pinMode(LED0_PIN, OUTPUT);
   pinMode(LED1_PIN, OUTPUT);
   
+  led0.pin = LED0_PIN;
+  led1.pin = LED1_PIN;
+
   // Force turn OFF all leds.
   for(size_t i=0; i<leds_count; i++) {
     SMART_LED & led = *leds[i];
@@ -579,18 +467,18 @@ void loop() {
   // should we update a LED mqtt state ?
   for(size_t i=0; i<leds_count; i++) {
     SMART_LED & led = *leds[i];
-    if (led.mqtt.is_dirty) {
+    if (led.state.mqtt.is_dirty) {
       if (mqtt_client.connected()) {
-        const char * topic = led.entity.state_topic.c_str();
-        const char * payload = led.mqtt.payload.c_str();
-        if (!is_empty(topic) && !is_empty(payload) ) {
-          mqtt_client.publish(topic, payload);
+        const String & topic = led.entity.getStateTopic();
+        const String & payload = led.state.mqtt.payload;
+        if ( !topic.isEmpty() && !payload.isEmpty() ) {
+          mqtt_client.publish(topic.c_str(), payload.c_str());
           Serial.print("MQTT publish: topic=");
           Serial.print(topic);
           Serial.print("   payload=");
           Serial.println(payload);
           
-          led.mqtt.is_dirty = false;
+          led.state.mqtt.is_dirty = false;
         }
       }
     }
