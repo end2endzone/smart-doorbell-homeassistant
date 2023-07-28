@@ -46,6 +46,7 @@ bool is_empty(const char * s);
 bool parse_boolean(const char * value);
 uint8_t parse_uint8(const char * value);
 void publish_entity_discovery(HaMqttEntity * entity);
+void publish_entity_state(HaMqttEntity * entity, MQTT_STATE * mqtt);
 void subscribe_to_entity_command_topic(HaMqttEntity * entity);
 
 
@@ -188,6 +189,7 @@ void setup_led(size_t led_index) {
 void setup_mqtt() {
   mqtt_client.setServer(mqtt_server, 1883);
   mqtt_client.setCallback(mqtt_subscription_callback);
+  mqtt_client.setKeepAlive(30);
   
   // Changing default buffer size. If buffer is too small, publishing and notifications are discarded.
   uint16_t default_buffer_size = mqtt_client.getBufferSize();
@@ -322,7 +324,7 @@ void mqtt_reconnect() {
       delay(5000);
     }
 
-    // Do initialization stuff when we fisrt connect.
+    // Do initialization stuff when we first connect.
     if (mqtt_client.connected()) {
       
       for(size_t i=0; i<leds_count; i++) {
@@ -331,6 +333,10 @@ void mqtt_reconnect() {
         // Publish Home Assistant mqtt discovery topic
         publish_entity_discovery(&led.entity);
     
+        // Publish entity's state to initialize Home Assistant UI
+        led.state.mqtt.is_dirty = true;
+        publish_entity_state(&led.entity, &led.state.mqtt);
+
         // Subscribe to receive entity state change notifications
         subscribe_to_entity_command_topic(&led.entity);
       }
@@ -425,6 +431,23 @@ void publish_entity_discovery(HaMqttEntity * entity) {
   Serial.println(payload);
 }
 
+void publish_entity_state(HaMqttEntity * entity, MQTT_STATE * mqtt) {
+  if (!mqtt_client.connected())
+    return;
+
+  const String & topic = entity->getStateTopic();
+  const String & payload = mqtt->payload;
+  if ( !topic.isEmpty() && !payload.isEmpty() ) {
+    mqtt_client.publish(topic.c_str(), payload.c_str());
+    Serial.print("MQTT publish: topic=");
+    Serial.print(topic);
+    Serial.print("   payload=");
+    Serial.println(payload);
+    
+    mqtt->is_dirty = false;
+  }
+}
+
 void subscribe_to_entity_command_topic(HaMqttEntity * entity) {
   const char * topic = entity->getCommandTopic().c_str();
   if (is_empty(topic))
@@ -468,19 +491,7 @@ void loop() {
   for(size_t i=0; i<leds_count; i++) {
     SMART_LED & led = *leds[i];
     if (led.state.mqtt.is_dirty) {
-      if (mqtt_client.connected()) {
-        const String & topic = led.entity.getStateTopic();
-        const String & payload = led.state.mqtt.payload;
-        if ( !topic.isEmpty() && !payload.isEmpty() ) {
-          mqtt_client.publish(topic.c_str(), payload.c_str());
-          Serial.print("MQTT publish: topic=");
-          Serial.print(topic);
-          Serial.print("   payload=");
-          Serial.println(payload);
-          
-          led.state.mqtt.is_dirty = false;
-        }
-      }
+      publish_entity_state(&led.entity, &led.state.mqtt);
     }
   }
 }
