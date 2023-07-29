@@ -2,7 +2,10 @@
 
 #include "HaMqttDiscovery.hpp"
 #include "HaMqttDevice.hpp"
+
 #include <ArduinoJson.h>
+
+namespace HaMqttDiscovery {
 
 class HaMqttDevice;
 class HaMqttEntity;
@@ -149,16 +152,16 @@ class HaMqttEntity {
 
     void getDiscoveryTopic(String & topic) const {
       if (!unique_id.isEmpty()) {
-        topic = getHomeAssistantDiscoveryPrefix() + "/" + toString(type) + "/" + unique_id + "/config";
+        topic = ha_discovery_prefix + "/" + toString(type) + "/" + unique_id + "/config";
       } else {
         const String * device_identifier = NULL;
         if (device) {
           device_identifier = device->getIdentifier(0);
         }
         if (device_identifier)
-          topic = getHomeAssistantDiscoveryPrefix() + "/" + toString(type) + "/" + (*device_identifier) + "_" + unique_id + "/config";
+          topic = ha_discovery_prefix + "/" + toString(type) + "/" + (*device_identifier) + "_" + unique_id + "/config";
         else
-          topic = getHomeAssistantDiscoveryPrefix() + "/" + toString(type) + "/" + unique_id + "/config";
+          topic = ha_discovery_prefix + "/" + toString(type) + "/" + unique_id + "/config";
       }
     }
 
@@ -183,8 +186,8 @@ class HaMqttEntity {
 
       if (device) {
         doc["availability_topic"] = device->getAvailabilityTopic();
-        doc["payload_available"] = ha_online_string;
-        doc["payload_not_available"] = ha_offline_string;
+        doc["payload_available"] = ha_availability_online;
+        doc["payload_not_available"] = ha_availability_offline;
 
         JsonObject json_device = doc.createNestedObject("device");
         device->serializeTo(json_device);
@@ -208,3 +211,5 @@ class HaMqttEntity {
     typedef std::vector<KEY_VALUE_PAIR> KeyValuePairVector;
     KeyValuePairVector more;
 };
+
+}; // namespace HaMqttDiscovery

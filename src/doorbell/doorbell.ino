@@ -9,6 +9,8 @@
 #include "HaMqttDiscovery/HaMqttEntity.hpp"
 #include "HaMqttDiscovery/HaMqttDevice.hpp"
 
+using namespace HaMqttDiscovery;
+
 struct MQTT_STATE {
   String payload; // payload of the mqtt state topic, if is_dirty is set
   bool is_dirty;  // true if the state has changed and the mqtt payload must be published to topic
@@ -177,7 +179,6 @@ void setup_device() {
   this_device.setModel("ESP8266");
   this_device.setHardwareVersion("2.2");
   this_device.setSoftwareVersion("0.1");
-  this_device.setup();
 
   setup_led(0);
   setup_led(1);
@@ -188,7 +189,7 @@ void setup_led(size_t led_index) {
 
   String led_index_str = String(led_index);
 
-  // Configure the LED-0 entity attributes
+  // Configure the LED entity attributes
   static const String NAME_PREFIX = "LED ";
   led.entity.setIntegrationType(HA_MQTT_LIGHT);
   led.entity.setName(NAME_PREFIX + led_index_str);
@@ -317,17 +318,17 @@ void mqtt_reconnect() {
     bool connect_success = false;
 
     // Attempt to connect
-    const HaMqttDevice::LastWillInfo & lwt_info = this_device.getLastWillAndTestamentInfo();
-    if (!lwt_info.topic.isEmpty() && !lwt_info.payload.isEmpty()) {
+    MqttLastWillAndTestament lwt;
+    if (this_device.getLastWillAndTestamentInfo(lwt)) {
       // Connect and setup an MQTT Last Will and Testament
       connect_success = mqtt_client.connect(
           device_identifier.c_str(),
           mqtt_user,
           mqtt_pass,
-          lwt_info.topic.c_str(),
-          lwt_info.qos,
-          lwt_info.retain,
-          lwt_info.payload.c_str());
+          lwt.topic.c_str(),
+          lwt.qos,
+          lwt.retain,
+          lwt.payload.c_str());
     } else {
       // Connect normally
       connect_success = mqtt_client.connect(device_identifier.c_str(), mqtt_user, mqtt_pass);
@@ -480,9 +481,9 @@ void publish_device_status(HaMqttDevice * device, bool online) {
   const String & topic = device->getAvailabilityTopic();
   const char * payload = NULL;
   if (online) {
-    payload = getHomeAssistantOnlineString().c_str();
+    payload = ha_availability_online.c_str();
   } else {
-    payload = getHomeAssistantOfflineString().c_str();
+    payload = ha_availability_offline.c_str();
   }
   mqtt_client.publish(topic.c_str(), payload);
 

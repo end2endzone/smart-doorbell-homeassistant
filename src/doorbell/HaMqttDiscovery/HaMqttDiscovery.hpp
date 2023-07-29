@@ -1,39 +1,10 @@
 #pragma once
 
+namespace HaMqttDiscovery {
+
 static String ha_discovery_prefix = "homeassistant";
-static String ha_online_string = "online";
-static String ha_offline_string = "offline";
-
-static void setHomeAssistantDiscoveryPrefix(const String & value) {
-    ha_discovery_prefix = value;
-}
-static void setHomeAssistantDiscoveryPrefix(const char * value) {
-    ha_discovery_prefix = value;
-}
-static const String & getHomeAssistantDiscoveryPrefix() {
-    return ha_discovery_prefix;
-}
-
-static void setHomeAssistantOnlineString(const String & value) {
-    ha_online_string = value;
-}
-static void setHomeAssistantOnlineString(const char * value) {
-    ha_online_string = value;
-}
-static const String & getHomeAssistantOnlineString() {
-    return ha_online_string;
-}
-
-static void setHomeAssistantOfflineString(const String & value) {
-    ha_offline_string = value;
-}
-static void setHomeAssistantOfflineString(const char * value) {
-    ha_offline_string = value;
-}
-static const String & getHomeAssistantOfflineString() {
-    return ha_offline_string;
-}
-
+static String ha_availability_online = "online";
+static String ha_availability_offline = "offline";
 
 enum HA_MQTT_INTEGRATION_TYPE {
     HA_MQTT_ALARM_CONTROL_PANEL ,
@@ -91,3 +62,5 @@ const char * toString(const HA_MQTT_INTEGRATION_TYPE & type) {
         default: return "";
     };
 }
+
+}; // namespace HaMqttDiscovery
