@@ -35,7 +35,7 @@ void led_turn_on(size_t led_index, uint8_t brightness);
 void led_turn_off(size_t led_index);
 void setup();
 void setup_wifi();
-void setup_device_identifier();
+void setup_device();
 void setup_led(size_t led_index);
 void setup_mqtt();
 size_t print_cstr_without_terminating_null(const char* str, size_t length, size_t max_chunk_size);
@@ -47,6 +47,7 @@ bool parse_boolean(const char * value);
 uint8_t parse_uint8(const char * value);
 void publish_entity_discovery(HaMqttEntity * entity);
 void publish_entity_state(HaMqttEntity * entity, MQTT_STATE * mqtt);
+void publish_device_status(HaMqttDevice * device);
 void subscribe_to_entity_command_topic(HaMqttEntity * entity);
 
 
@@ -150,7 +151,7 @@ void setup_wifi() {
   randomSeed(micros());
 }
 
-void setup_device_identifier() {
+void setup_device() {
   device_identifier.clear();
   device_identifier.reserve(32);
   device_identifier = device_identifier_prefix;
@@ -168,6 +169,18 @@ void setup_device_identifier() {
   }
   Serial.print("Device identifier: ");
   Serial.println(device_identifier);
+
+  // Configure this device attributes
+  this_device.addIdentifier(device_identifier);
+  this_device.setName("Smart doorbell");
+  this_device.setManufacturer("end2endzone");
+  this_device.setModel("ESP8266");
+  this_device.setHardwareVersion("2.2");
+  this_device.setSoftwareVersion("0.1");
+  this_device.setup();
+
+  setup_led(0);
+  setup_led(1);
 }
 
 void setup_led(size_t led_index) {
@@ -199,17 +212,6 @@ void setup_mqtt() {
   mqtt_client.setBufferSize(4*default_buffer_size);
   Serial.print("PubSubClient.buffer_size set to ");
   Serial.println(mqtt_client.getBufferSize());
-
-  // Configure this device attributes
-  this_device.addIdentifier(device_identifier);
-  this_device.setName("Smart doorbell");
-  this_device.setManufacturer("end2endzone");
-  this_device.setModel("ESP8266");
-  this_device.setHardwareVersion("2.2");
-  this_device.setSoftwareVersion("0.1");
-
-  setup_led(0);
-  setup_led(1);
 }
 
 bool is_printable(const byte* payload, unsigned int length) {
@@ -310,10 +312,29 @@ void mqtt_subscription_callback(const char* topic, const byte* payload, unsigned
 void mqtt_reconnect() {
   // Loop until we're reconnected
   while (!mqtt_client.connected()) {
-    Serial.print("Attempting MQTT connection...");
+    Serial.print("Attempting MQTT connection... ");
+
+    bool connect_success = false;
+
     // Attempt to connect
-    if (mqtt_client.connect(device_identifier.c_str(), mqtt_user, mqtt_pass)) {
-      Serial.print("Connected as '");
+    const HaMqttDevice::LastWillInfo & lwt_info = this_device.getLastWillAndTestamentInfo();
+    if (!lwt_info.topic.isEmpty() && !lwt_info.payload.isEmpty()) {
+      // Connect and setup an MQTT Last Will and Testament
+      connect_success = mqtt_client.connect(
+          device_identifier.c_str(),
+          mqtt_user,
+          mqtt_pass,
+          lwt_info.topic.c_str(),
+          lwt_info.qos,
+          lwt_info.retain,
+          lwt_info.payload.c_str());
+    } else {
+      // Connect normally
+      connect_success = mqtt_client.connect(device_identifier.c_str(), mqtt_user, mqtt_pass);
+    }
+    
+    if (connect_success) {
+      Serial.print("connected as '");
       Serial.print(device_identifier.c_str());
       Serial.println("'.");
     } else {
@@ -327,6 +348,8 @@ void mqtt_reconnect() {
     // Do initialization stuff when we first connect.
     if (mqtt_client.connected()) {
       
+      publish_device_status(&this_device, false);
+
       for(size_t i=0; i<leds_count; i++) {
         SMART_LED & led = *leds[i];
 
@@ -340,6 +363,8 @@ void mqtt_reconnect() {
         // Subscribe to receive entity state change notifications
         subscribe_to_entity_command_topic(&led.entity);
       }
+
+      publish_device_status(&this_device, true);
     }
     
   }
@@ -448,6 +473,26 @@ void publish_entity_state(HaMqttEntity * entity, MQTT_STATE * mqtt) {
   }
 }
 
+void publish_device_status(HaMqttDevice * device, bool online) {
+  if (!mqtt_client.connected())
+    return;
+
+  const String & topic = device->getAvailabilityTopic();
+  const char * payload = NULL;
+  if (online) {
+    payload = getHomeAssistantOnlineString().c_str();
+  } else {
+    payload = getHomeAssistantOfflineString().c_str();
+  }
+  mqtt_client.publish(topic.c_str(), payload);
+
+  Serial.print("MQTT device status publish: topic=");
+  Serial.print(topic);
+  Serial.print("   payload=");
+  Serial.println(payload);
+}
+
+
 void subscribe_to_entity_command_topic(HaMqttEntity * entity) {
   const char * topic = entity->getCommandTopic().c_str();
   if (is_empty(topic))
@@ -476,7 +521,7 @@ void setup() {
   Serial.begin(115200);
   
   setup_wifi();
-  setup_device_identifier();
+  setup_device();
   setup_mqtt();
 }
 

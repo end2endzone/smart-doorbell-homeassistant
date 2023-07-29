@@ -9,15 +9,6 @@ class HaMqttEntity;
 
 class HaMqttEntity {
   public:
-    static void setHomeAssistantDiscoveryPrefix(const String & value) {
-      ha_discovery_prefix = value;
-    }
-    static void setHomeAssistantDiscoveryPrefix(const char * value) {
-      ha_discovery_prefix = value;
-    }
-    static const String getHomeAssistantDiscoveryPrefix() {
-      return ha_discovery_prefix;
-    }
 
     HaMqttEntity() {
         this->device = NULL;
@@ -191,15 +182,16 @@ class HaMqttEntity {
         doc["state_topic"] = state_topic;
 
       if (device) {
+        doc["availability_topic"] = device->getAvailabilityTopic();
+        doc["payload_available"] = ha_online_string;
+        doc["payload_not_available"] = ha_offline_string;
+
         JsonObject json_device = doc.createNestedObject("device");
         device->serializeTo(json_device);
       }
 
       serializeJson(doc, payload);
     }
-
-  private:
-    static String ha_discovery_prefix;
 
     HA_MQTT_INTEGRATION_TYPE type;
     HaMqttDevice * device;
@@ -216,5 +208,3 @@ class HaMqttEntity {
     typedef std::vector<KEY_VALUE_PAIR> KeyValuePairVector;
     KeyValuePairVector more;
 };
-
- String HaMqttEntity::ha_discovery_prefix = "homeassistant";

@@ -11,17 +11,26 @@ class HaMqttDevice {
     typedef std::vector<String> StringVector;
     typedef std::vector<HaMqttEntity*> EntityPtrVector;
 
+    struct LastWillInfo {
+      String topic;
+      String payload;
+      uint8_t qos;
+      bool retain;
+    };
+
     HaMqttDevice() {
     }
 
     HaMqttDevice(const char * identifier, const char * name_) {
         identifiers.push_back(identifier);
         name = name_;
+        setup();
     }
 
     HaMqttDevice(const String& identifier, const String & name_) {
         identifiers.push_back(identifier);
         name = name_;
+        setup();
     }
 
     HaMqttDevice(const char * identifier, const char * name_, const char * manufacturer_, const char * model_) {
@@ -29,6 +38,7 @@ class HaMqttDevice {
         name = name_;
         manufacturer = manufacturer_;
         model = model_;
+        setup();
     }
 
     HaMqttDevice(const String& identifier, const String& name_, const String& manufacturer_, const String& model_) {
@@ -36,6 +46,7 @@ class HaMqttDevice {
         name = name_;
         manufacturer = manufacturer_;
         model = model_;
+        setup();
     }
 
     ~HaMqttDevice() {
@@ -146,6 +157,7 @@ class HaMqttDevice {
     const String & getConfigurationUrl() const {
         return configuration_url ;
     }
+
     void setSuggestedArea(const String & value) {
         suggested_area = value;
     }
@@ -156,6 +168,26 @@ class HaMqttDevice {
 
     const String & getSuggestedArea() const {
         return suggested_area;
+    }
+
+    const LastWillInfo & getLastWillAndTestamentInfo() const {
+        return lwt_info;
+    }
+
+    const String & getAvailabilityTopic() const {
+      return status_topic;
+    }
+
+    void setup() {
+      if (identifiers.empty())
+        return;
+      const String & first_identifier = identifiers[0];
+      status_topic = first_identifier + "/status";
+
+      lwt_info.topic = status_topic;
+      lwt_info.payload = ha_offline_string;
+      lwt_info.qos = 2;
+      lwt_info.retain = true;
     }
 
     void serializeTo(JsonObject json_object) const {
@@ -186,6 +218,8 @@ class HaMqttDevice {
   private:
     EntityPtrVector entities;
     StringVector identifiers;
+    LastWillInfo lwt_info;      // computed in instance setup()
+    String status_topic;        // computed in instance setup()
     String name;
     String manufacturer;
     String model;
