@@ -1,4 +1,5 @@
-#pragma once
+#ifndef HA_MQTT_DISCOVERY_ENTITY
+#define HA_MQTT_DISCOVERY_ENTITY
 
 #include "HaMqttDiscovery.hpp"
 #include "HaMqttDevice.hpp"
@@ -12,7 +13,6 @@ class HaMqttEntity;
 
 class HaMqttEntity {
   public:
-
     HaMqttEntity() {
         this->device = NULL;
         this->type = HA_MQTT_INTEGRATION_TYPE::HA_MQTT_BINARY_SENSOR;
@@ -29,6 +29,10 @@ class HaMqttEntity {
         this->name = name;
         this->unique_id = unique_id;
         this->object_id = object_id;
+    }
+
+    void setMqttAdaptor(MqttState * mqtt_adaptor) {
+      this->mqtt_adaptor = mqtt_adaptor;
     }
 
     void setIntegrationType(const HA_MQTT_INTEGRATION_TYPE & type) {
@@ -196,8 +200,65 @@ class HaMqttEntity {
       serializeJson(doc, payload);
     }
 
-    HA_MQTT_INTEGRATION_TYPE type;
+    bool publishMqttDiscovery() {
+      if (mqtt_adaptor == NULL) return false;
+      if (!mqtt_adaptor->connected()) return false;
+
+      String topic;
+      String payload;
+      getDiscoveryTopic(topic);
+      getDiscoveryPayload(payload);
+
+      if (topic.isEmpty() || payload.isEmpty())
+        return false;
+
+      static const bool retained = true;
+      bool result = mqtt_adaptor->publish(topic.c_str(), payload.c_str(), retained);
+
+#     ifdef HA_MQTT_DISCOVERY_PRINT_FUNC
+      if (result) {
+        HA_MQTT_DISCOVERY_PRINT_FUNC("MQTT publish: topic=");
+        HA_MQTT_DISCOVERY_PRINT_FUNC(topic);
+        HA_MQTT_DISCOVERY_PRINT_FUNC("   payload=");
+        HA_MQTT_DISCOVERY_PRINT_FUNC(payload);
+        HA_MQTT_DISCOVERY_PRINT_FUNC("\n");     
+      } else {
+        HA_MQTT_DISCOVERY_PRINT_FUNC("MQTT publish failure: topic=");
+        HA_MQTT_DISCOVERY_PRINT_FUNC(topic);
+        HA_MQTT_DISCOVERY_PRINT_FUNC("\n");     
+      }
+#     endif
+
+      return result;
+    }
+
+    bool subscribe() {
+      if (mqtt_adaptor == NULL) return false;
+      if (!mqtt_adaptor->connected()) return false;
+      if (command_topic.isEmpty()) return false;
+
+      const char * topic = command_topic.c_str();
+      bool result = mqtt_adaptor->subscribe(topic);
+
+#     ifdef HA_MQTT_DISCOVERY_PRINT_FUNC
+      if (result) {
+        HA_MQTT_DISCOVERY_PRINT_FUNC("MQTT subscribe: topic=");
+        HA_MQTT_DISCOVERY_PRINT_FUNC(topic);
+        HA_MQTT_DISCOVERY_PRINT_FUNC("\n");     
+      } else {
+        HA_MQTT_DISCOVERY_PRINT_FUNC("MQTT subscribe failure: topic=");
+        HA_MQTT_DISCOVERY_PRINT_FUNC(topic);
+        HA_MQTT_DISCOVERY_PRINT_FUNC("\n");     
+      }
+#     endif
+
+      return result;
+    }
+
+  private:
+    MqttState * mqtt_adaptor;
     HaMqttDevice * device;
+    HA_MQTT_INTEGRATION_TYPE type;
     String name;
     String unique_id;
     String object_id;
@@ -213,3 +274,5 @@ class HaMqttEntity {
 };
 
 }; // namespace HaMqttDiscovery
+
+#endif // HA_MQTT_DISCOVERY_ENTITY

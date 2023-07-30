@@ -8,6 +8,7 @@
 #include "arduino_secrets.h"
 #include "HaMqttDiscovery/HaMqttEntity.hpp"
 #include "HaMqttDiscovery/HaMqttDevice.hpp"
+#include "HaMqttDiscovery/MqttAdaptorPubSubClient.hpp"
 
 using namespace HaMqttDiscovery;
 
@@ -47,10 +48,7 @@ void show_error(uint16_t err);
 bool is_empty(const char * s);
 bool parse_boolean(const char * value);
 uint8_t parse_uint8(const char * value);
-void publish_entity_discovery(HaMqttEntity * entity);
 void publish_entity_state(HaMqttEntity * entity, MQTT_STATE * mqtt);
-void publish_device_status(HaMqttDevice * device);
-void subscribe_to_entity_command_topic(HaMqttEntity * entity);
 
 
 //************************************************************
@@ -74,6 +72,7 @@ String device_identifier; // defined as device_identifier_prefix followed by dev
 
 // MQTT variables
 PubSubClient mqtt_client(wifi_client);
+MqttAdaptorPubSubClient publish_adaptor;
 HaMqttDevice this_device;
 
 SMART_LED led0;
@@ -179,6 +178,7 @@ void setup_device() {
   this_device.setModel("ESP8266");
   this_device.setHardwareVersion("2.2");
   this_device.setSoftwareVersion("0.1");
+  this_device.setMqttAdaptor(&publish_adaptor);
 
   setup_led(0);
   setup_led(1);
@@ -198,6 +198,7 @@ void setup_led(size_t led_index) {
   led.entity.addKeyValue("schema","json");
   led.entity.addKeyValue("brightness","true");
   led.entity.setDevice(&this_device); // this also adds the entity to the device and generates a unique_id based on the first identifier of the device.
+  led.entity.setMqttAdaptor(&publish_adaptor);
 }
 
 void setup_mqtt() {
@@ -349,23 +350,23 @@ void mqtt_reconnect() {
     // Do initialization stuff when we first connect.
     if (mqtt_client.connected()) {
       
-      publish_device_status(&this_device, false);
+      this_device.publishMqttDeviceStatus(false);
 
       for(size_t i=0; i<leds_count; i++) {
         SMART_LED & led = *leds[i];
 
         // Publish Home Assistant mqtt discovery topic
-        publish_entity_discovery(&led.entity);
+        led.entity.publishMqttDiscovery();
     
         // Publish entity's state to initialize Home Assistant UI
         led.state.mqtt.is_dirty = true;
         publish_entity_state(&led.entity, &led.state.mqtt);
 
         // Subscribe to receive entity state change notifications
-        subscribe_to_entity_command_topic(&led.entity);
+        led.entity.subscribe();
       }
 
-      publish_device_status(&this_device, true);
+      this_device.publishMqttDeviceStatus(true);
     }
     
   }
@@ -474,36 +475,6 @@ void publish_entity_state(HaMqttEntity * entity, MQTT_STATE * mqtt) {
   }
 }
 
-void publish_device_status(HaMqttDevice * device, bool online) {
-  if (!mqtt_client.connected())
-    return;
-
-  const String & topic = device->getAvailabilityTopic();
-  const char * payload = NULL;
-  if (online) {
-    payload = ha_availability_online.c_str();
-  } else {
-    payload = ha_availability_offline.c_str();
-  }
-  mqtt_client.publish(topic.c_str(), payload);
-
-  Serial.print("MQTT device status publish: topic=");
-  Serial.print(topic);
-  Serial.print("   payload=");
-  Serial.println(payload);
-}
-
-
-void subscribe_to_entity_command_topic(HaMqttEntity * entity) {
-  const char * topic = entity->getCommandTopic().c_str();
-  if (is_empty(topic))
-    return;
-
-  mqtt_client.subscribe(topic);
-  Serial.print("MQTT subscribe: topic=");
-  Serial.println(topic);
-}
-
 void setup() {
   pinMode(LED0_PIN, OUTPUT);
   pinMode(LED1_PIN, OUTPUT);
@@ -511,6 +482,10 @@ void setup() {
   led0.pin = LED0_PIN;
   led1.pin = LED1_PIN;
 
+  publish_adaptor.setPubSubClient(&mqtt_client);
+
+  Serial.begin(115200);
+  
   // Force turn OFF all leds.
   for(size_t i=0; i<leds_count; i++) {
     SMART_LED & led = *leds[i];
@@ -518,8 +493,6 @@ void setup() {
     led.state.brightness = 255;
     led_turn_off(i); // for initializing led's internal variables
   }
-  
-  Serial.begin(115200);
   
   setup_wifi();
   setup_device();

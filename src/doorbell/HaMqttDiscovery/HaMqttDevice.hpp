@@ -1,9 +1,11 @@
-#pragma once
+#ifndef HA_MQTT_DISCOVERY_DEVICE
+#define HA_MQTT_DISCOVERY_DEVICE
 
 #include <vector>
 #include <ArduinoJson.h>
 
 #include "MqttLastWillAndTestament.hpp"
+#include "MqttAdaptor.hpp"
 
 namespace HaMqttDiscovery {
 
@@ -16,19 +18,23 @@ class HaMqttDevice {
     typedef std::vector<HaMqttEntity*> EntityPtrVector;
 
     HaMqttDevice() {
+        mqtt_adaptor = NULL;
     }
 
     HaMqttDevice(const char * identifier, const char * name_) {
+        mqtt_adaptor = NULL;
         identifiers.push_back(identifier);
         name = name_;
     }
 
     HaMqttDevice(const String& identifier, const String & name_) {
+        mqtt_adaptor = NULL;
         identifiers.push_back(identifier);
         name = name_;
     }
 
     HaMqttDevice(const char * identifier, const char * name_, const char * manufacturer_, const char * model_) {
+        mqtt_adaptor = NULL;
         identifiers.push_back(identifier);
         name = name_;
         manufacturer = manufacturer_;
@@ -36,6 +42,7 @@ class HaMqttDevice {
     }
 
     HaMqttDevice(const String& identifier, const String& name_, const String& manufacturer_, const String& model_) {
+        mqtt_adaptor = NULL;
         identifiers.push_back(identifier);
         name = name_;
         manufacturer = manufacturer_;
@@ -43,6 +50,10 @@ class HaMqttDevice {
     }
 
     ~HaMqttDevice() {
+    }
+
+    void setMqttAdaptor(MqttState * mqtt_adaptor) {
+      this->mqtt_adaptor = mqtt_adaptor;
     }
 
     size_t addEntity(HaMqttEntity * entity) {
@@ -192,6 +203,31 @@ class HaMqttDevice {
       return availability_topic;
     }
 
+    bool publishMqttDeviceStatus(bool online) {
+      if (mqtt_adaptor == NULL) return false;
+      if (!mqtt_adaptor->connected()) return false;
+
+      const char * topic = availability_topic.c_str();
+      const char * payload = (online ? ha_availability_online.c_str() : ha_availability_offline.c_str());
+      bool result = mqtt_adaptor->publish(topic, payload);
+
+#     ifdef HA_MQTT_DISCOVERY_PRINT_FUNC
+      if (result) {
+        HA_MQTT_DISCOVERY_PRINT_FUNC("MQTT publish: topic=");
+        HA_MQTT_DISCOVERY_PRINT_FUNC(topic);
+        HA_MQTT_DISCOVERY_PRINT_FUNC("   payload=");
+        HA_MQTT_DISCOVERY_PRINT_FUNC(payload);
+        HA_MQTT_DISCOVERY_PRINT_FUNC("\n");     
+      } else {
+        HA_MQTT_DISCOVERY_PRINT_FUNC("MQTT publish failure: topic=");
+        HA_MQTT_DISCOVERY_PRINT_FUNC(topic);
+        HA_MQTT_DISCOVERY_PRINT_FUNC("\n");     
+      }
+#     endif
+
+      return result;
+    }
+
     void serializeTo(JsonObject json_object) const {
         JsonArray json_identifiers = json_object.createNestedArray("identifiers");
         for(size_t i=0; i<identifiers.size(); i++) {
@@ -218,6 +254,7 @@ class HaMqttDevice {
     }
 
   private:
+    MqttState * mqtt_adaptor;
     EntityPtrVector entities;
     StringVector identifiers;
     String availability_topic;        // computed when first calling addIdentifier()
@@ -232,3 +269,5 @@ class HaMqttDevice {
 };
 
 }; // namespace HaMqttDiscovery
+
+#endif // HA_MQTT_DISCOVERY_DEVICE

@@ -1,6 +1,11 @@
-#pragma once
+#ifndef HA_MQTT_DISCOVERY
+#define HA_MQTT_DISCOVERY
 
 namespace HaMqttDiscovery {
+
+#ifndef HA_MQTT_DISCOVERY_PRINT_FUNC
+#   define HA_MQTT_DISCOVERY_PRINT_FUNC Serial.print
+#endif
 
 static String ha_discovery_prefix = "homeassistant";
 static String ha_availability_online = "online";
@@ -64,3 +69,5 @@ const char * toString(const HA_MQTT_INTEGRATION_TYPE & type) {
 }
 
 }; // namespace HaMqttDiscovery
+
+#endif // HA_MQTT_DISCOVERY
