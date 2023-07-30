@@ -52,7 +52,7 @@ class HaMqttDevice {
     ~HaMqttDevice() {
     }
 
-    void setMqttAdaptor(MqttState * mqtt_adaptor) {
+    void setMqttAdaptor(MqttAdaptor * mqtt_adaptor) {
       this->mqtt_adaptor = mqtt_adaptor;
     }
 
@@ -254,7 +254,7 @@ class HaMqttDevice {
     }
 
   private:
-    MqttState * mqtt_adaptor;
+    MqttAdaptor * mqtt_adaptor;
     EntityPtrVector entities;
     StringVector identifiers;
     String availability_topic;        // computed when first calling addIdentifier()

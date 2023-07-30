@@ -31,7 +31,7 @@ class HaMqttEntity {
         this->object_id = object_id;
     }
 
-    void setMqttAdaptor(MqttState * mqtt_adaptor) {
+    void setMqttAdaptor(MqttAdaptor * mqtt_adaptor) {
       this->mqtt_adaptor = mqtt_adaptor;
     }
 
@@ -256,7 +256,7 @@ class HaMqttEntity {
     }
 
   private:
-    MqttState * mqtt_adaptor;
+    MqttAdaptor * mqtt_adaptor;
     HaMqttDevice * device;
     HA_MQTT_INTEGRATION_TYPE type;
     String name;

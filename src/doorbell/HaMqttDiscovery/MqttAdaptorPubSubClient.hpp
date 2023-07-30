@@ -7,7 +7,7 @@
 
 namespace HaMqttDiscovery {
 
-class MqttAdaptorPubSubClient : public virtual MqttState {
+class MqttAdaptorPubSubClient : public virtual MqttAdaptor {
   private:
     PubSubClient * client;
   public:

@@ -5,10 +5,10 @@
 
 namespace HaMqttDiscovery {
 
-class MqttState {
+class MqttAdaptor {
   public:
-    MqttState() {}
-    virtual ~MqttState() {}
+    MqttAdaptor() {}
+    virtual ~MqttAdaptor() {}
 
     virtual bool connected();
 
