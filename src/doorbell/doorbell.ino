@@ -5,22 +5,18 @@
 
 #include <strings.h>  // for strcasecmp
 #include <cctype>     //for isprint
+
 #include "arduino_secrets.h"
+
 #include "HaMqttDiscovery/HaMqttEntity.hpp"
 #include "HaMqttDiscovery/HaMqttDevice.hpp"
 #include "HaMqttDiscovery/MqttAdaptorPubSubClient.hpp"
 
 using namespace HaMqttDiscovery;
 
-struct MQTT_STATE {
-  String payload; // payload of the mqtt state topic, if is_dirty is set
-  bool is_dirty;  // true if the state has changed and the mqtt payload must be published to topic
-};
-
 struct LIGHT_STATE {
   bool is_on;
   uint8_t brightness;
-  MQTT_STATE mqtt;
 };
 
 struct SMART_LED {
@@ -48,7 +44,6 @@ void show_error(uint16_t err);
 bool is_empty(const char * s);
 bool parse_boolean(const char * value);
 uint8_t parse_uint8(const char * value);
-void publish_entity_state(HaMqttEntity * entity, MQTT_STATE * mqtt);
 
 
 //************************************************************
@@ -107,8 +102,7 @@ void led_turn_on(size_t led_index, uint8_t brightness = 255) {
   
   led.state.is_on = true;
   led.state.brightness = brightness;
-  led.state.mqtt.is_dirty = true;
-  led.state.mqtt.payload = "{\"state\":\"ON\",\"brightness\":" + String(led.state.brightness) + "}";
+  led.entity.setState(String() + "{\"state\":\"ON\",\"brightness\":" + String(led.state.brightness) + "}");
 }
 
 void led_turn_off(size_t led_index) {
@@ -117,8 +111,7 @@ void led_turn_off(size_t led_index) {
   // Turn the LED off by making the voltage HIGH
   digitalWrite(led.pin, HIGH); // OFF
   led.state.is_on = false;
-  led.state.mqtt.is_dirty = true;
-  led.state.mqtt.payload = "{\"state\":\"OFF\",\"brightness\":" + String(led.state.brightness) + "}";
+  led.entity.setState(String() + "{\"state\":\"OFF\",\"brightness\":" + String(led.state.brightness) + "}");
 
   Serial.print("Set LED-");
   Serial.print(led_index);
@@ -359,8 +352,8 @@ void mqtt_reconnect() {
         led.entity.publishMqttDiscovery();
     
         // Publish entity's state to initialize Home Assistant UI
-        led.state.mqtt.is_dirty = true;
-        publish_entity_state(&led.entity, &led.state.mqtt);
+        led.entity.getState().setDirty();
+        led.entity.publishMqttState();
 
         // Subscribe to receive entity state change notifications
         led.entity.subscribe();
@@ -458,23 +451,6 @@ void publish_entity_discovery(HaMqttEntity * entity) {
   Serial.println(payload);
 }
 
-void publish_entity_state(HaMqttEntity * entity, MQTT_STATE * mqtt) {
-  if (!mqtt_client.connected())
-    return;
-
-  const String & topic = entity->getStateTopic();
-  const String & payload = mqtt->payload;
-  if ( !topic.isEmpty() && !payload.isEmpty() ) {
-    mqtt_client.publish(topic.c_str(), payload.c_str());
-    Serial.print("MQTT publish: topic=");
-    Serial.print(topic);
-    Serial.print("   payload=");
-    Serial.println(payload);
-    
-    mqtt->is_dirty = false;
-  }
-}
-
 void setup() {
   pinMode(LED0_PIN, OUTPUT);
   pinMode(LED1_PIN, OUTPUT);
@@ -509,8 +485,8 @@ void loop() {
   // should we update a LED mqtt state ?
   for(size_t i=0; i<leds_count; i++) {
     SMART_LED & led = *leds[i];
-    if (led.state.mqtt.is_dirty) {
-      publish_entity_state(&led.entity, &led.state.mqtt);
+    if (led.entity.getState().isDirty()) {
+      led.entity.publishMqttState();
     }
   }
 }

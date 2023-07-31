@@ -3,6 +3,7 @@
 
 #include "HaMqttDiscovery.hpp"
 #include "HaMqttDevice.hpp"
+#include "MqttState.hpp"
 
 #include <ArduinoJson.h>
 
@@ -101,6 +102,26 @@ class HaMqttEntity {
 
     const String & getStateTopic() const {
         return state_topic;
+    }
+
+    void setState(const char * value) {
+        state.set(value);
+    }
+
+    void setState(const String & value) {
+        state.set(value);
+    }
+
+    void setState(const uint8_t * value, size_t length) {
+        state.set(value, length);
+    }
+
+    MqttState & getState() {
+        return state;
+    }
+
+    const MqttState & getState() const {
+        return state;
     }
 
     void setUniqueIdFromDeviceId() {
@@ -232,6 +253,63 @@ class HaMqttEntity {
       return result;
     }
 
+    bool publishMqttState(bool retained = false) {
+      if (mqtt_adaptor == NULL) return false;
+      if (!mqtt_adaptor->connected()) return false;
+
+      if (state_topic.isEmpty()) return false;
+      if (!state.isDirty())
+        return true; // nothing to do
+
+      const char * topic = state_topic.c_str();
+
+      bool result = false;
+      bool is_binary_payload =  state.isBinary();
+      bool is_string_payload = !is_string_payload;
+
+      if (is_string_payload) {
+        const char * payload = state.getStringValue().c_str();
+        result = mqtt_adaptor->publish(topic, payload, retained);
+
+#       ifdef HA_MQTT_DISCOVERY_PRINT_FUNC
+        if (result) {
+          HA_MQTT_DISCOVERY_PRINT_FUNC("MQTT publish: topic=");
+          HA_MQTT_DISCOVERY_PRINT_FUNC(topic);
+          HA_MQTT_DISCOVERY_PRINT_FUNC("   payload=");
+          HA_MQTT_DISCOVERY_PRINT_FUNC(payload);
+          HA_MQTT_DISCOVERY_PRINT_FUNC("\n");     
+        } else {
+          HA_MQTT_DISCOVERY_PRINT_FUNC("MQTT publish failure: topic=");
+          HA_MQTT_DISCOVERY_PRINT_FUNC(topic);
+          HA_MQTT_DISCOVERY_PRINT_FUNC("\n");     
+        }
+#       endif
+      } else {
+        // binary payload
+        const MqttState::Buffer & bin_payload = state.getBinaryValue();
+        result = mqtt_adaptor->publish(topic, bin_payload.buffer, bin_payload.size, retained);
+
+#       ifdef HA_MQTT_DISCOVERY_PRINT_FUNC
+        if (result) {
+          HA_MQTT_DISCOVERY_PRINT_FUNC("MQTT publish: topic=");
+          HA_MQTT_DISCOVERY_PRINT_FUNC(topic);
+          HA_MQTT_DISCOVERY_PRINT_FUNC("   (binary payload) size=");
+          HA_MQTT_DISCOVERY_PRINT_FUNC(bin_payload.size);
+          HA_MQTT_DISCOVERY_PRINT_FUNC("\n");     
+        } else {
+          HA_MQTT_DISCOVERY_PRINT_FUNC("MQTT publish failure: topic=");
+          HA_MQTT_DISCOVERY_PRINT_FUNC(topic);
+          HA_MQTT_DISCOVERY_PRINT_FUNC("\n");     
+        }
+#       endif
+      }
+
+      if (result)
+        state.clear();
+
+      return result;
+    }
+
     bool subscribe() {
       if (mqtt_adaptor == NULL) return false;
       if (!mqtt_adaptor->connected()) return false;
@@ -258,6 +336,8 @@ class HaMqttEntity {
   private:
     MqttAdaptor * mqtt_adaptor;
     HaMqttDevice * device;
+    MqttState state;
+
     HA_MQTT_INTEGRATION_TYPE type;
     String name;
     String unique_id;
