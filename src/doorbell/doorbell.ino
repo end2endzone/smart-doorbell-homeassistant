@@ -30,18 +30,16 @@ struct SMART_LED {
 //   Predeclarations
 //************************************************************
 
-void led_turn_on(size_t led_index, uint8_t brightness);
-void led_turn_off(size_t led_index);
 void setup();
 void setup_wifi();
 void setup_device();
 void setup_led(size_t led_index);
 void setup_mqtt();
+void led_turn_on(size_t led_index, uint8_t brightness);
+void led_turn_off(size_t led_index);
 size_t print_cstr_without_terminating_null(const char* str, size_t length, size_t max_chunk_size);
 void mqtt_subscription_callback(const char* topic, const byte* payload, unsigned int length);
 void mqtt_reconnect();
-void show_error(uint16_t err);
-bool is_empty(const char * s);
 bool parse_boolean(const char * value);
 uint8_t parse_uint8(const char * value);
 
@@ -365,44 +363,6 @@ void mqtt_reconnect() {
   }
 }
 
-void show_error(uint16_t err) {
-  // Setup a timer to fast blink for 5 seconds
-  SoftTimer blink_timer; //millisecond timer
-  blink_timer.setTimeOutTime(5000);
-  
-  while(true) {
-    // Fast blink the LED
-    blink_timer.reset(); //reset or start counting
-    while(!blink_timer.hasTimedOut()) {
-      led_turn_on(0, 255);
-      delay(50);
-  
-      led_turn_off(0);
-      delay(50);
-    }
-
-    delay(500);
-    
-    // Make x long blinks
-    for(uint16_t i=0; i<err; i++) {
-      led_turn_on(0, 255);
-      delay(500);
-      led_turn_off(0);
-      delay(500);
-    }
-    
-    // Wait again before restart
-    delay(3000);
-  }
-}
-
-bool is_empty(const char * s) {
-  if (s == NULL)
-    return true;
-  bool empty = (s[0] == '\0');
-  return empty;
-}
-
 bool parse_boolean(const char * value) {
   if (value == NULL)
     return false;
@@ -428,27 +388,6 @@ uint8_t parse_uint8(const char * value) {
     return 0;
   uint8_t numeric_value = (uint8_t)strtoul(value, NULL, 10);
   return numeric_value;
-}
-
-void publish_entity_discovery(HaMqttEntity * entity) {
-  if (!mqtt_client.connected())
-    return;
-
-  String topic;
-  String payload;
-  entity->getDiscoveryTopic(topic);
-  entity->getDiscoveryPayload(payload);
-
-  if (topic.isEmpty() || payload.isEmpty())
-    return;
-
-  static const bool retained = true;
-  mqtt_client.publish(topic.c_str(), payload.c_str(), retained);
-
-  Serial.print("MQTT publish: topic=");
-  Serial.print(topic);
-  Serial.print("   payload=");
-  Serial.println(payload);
 }
 
 void setup() {
