@@ -2,6 +2,7 @@
 #include <PubSubClient.h>   // https://www.arduino.cc/reference/en/libraries/pubsubclient/
 #include <SoftTimers.h>     // https://www.arduino.cc/reference/en/libraries/softtimers/
 #include <ArduinoJson.h>    // https://www.arduino.cc/reference/en/libraries/arduinojson/
+#include <Button.h>         // https://www.arduino.cc/reference/en/libraries/button/
 
 #include <strings.h>  // for strcasecmp
 #include <cctype>     //for isprint
@@ -24,6 +25,17 @@ struct SMART_LED {
   HaMqttEntity entity;
   LIGHT_STATE state;
 };
+
+struct DOORBELL_STATE {
+  bool is_pressed;
+};
+
+struct SMART_DOORBELL {
+  uint8_t pin;
+  HaMqttEntity entity;
+  DOORBELL_STATE state;
+};
+
 
 
 //************************************************************
@@ -56,6 +68,7 @@ const char* mqtt_pass = SECRET_MQTT_PASS;
 
 static const uint8_t LED0_PIN = 2;
 static const uint8_t LED1_PIN = 16;
+static const uint8_t DOORBELL_PIN = D5;
 
 WiFiClient wifi_client;
 SoftTimer publish_timer; //millisecond timer
@@ -70,9 +83,11 @@ HaMqttDevice this_device;
 
 SMART_LED led0;
 SMART_LED led1;
-
 SMART_LED * leds[] = {&led0, &led1};
 size_t leds_count = sizeof(leds)/sizeof(leds[0]);
+
+Button doorbell_button(DOORBELL_PIN);
+SMART_DOORBELL doorbell;
 
 void led_turn_on(size_t led_index, uint8_t brightness = 255) {
   SMART_LED & led = *(leds[led_index]);
@@ -173,6 +188,16 @@ void setup_device() {
 
   setup_led(0);
   setup_led(1);
+
+  // Configure DOORBELL entity attributes
+  doorbell.pin = DOORBELL_PIN;
+  doorbell.entity.setIntegrationType(HA_MQTT_BINARY_SENSOR);
+  doorbell.entity.setName("BELL");
+  doorbell.entity.setStateTopic(   device_identifier + "/doorbell/state");
+  doorbell.entity.addKeyValue("device_class","sound");
+  doorbell.entity.setDevice(&this_device); // this also adds the entity to the device and generates a unique_id based on the first identifier of the device.
+  doorbell.entity.setMqttAdaptor(&publish_adaptor);
+
 }
 
 void setup_led(size_t led_index) {
@@ -357,6 +382,11 @@ void mqtt_reconnect() {
         led.entity.subscribe();
       }
 
+      doorbell.entity.publishMqttDiscovery();
+      doorbell.state.is_pressed = false;
+      doorbell.entity.setState("OFF");
+      doorbell.entity.publishMqttState();
+
       this_device.publishMqttDeviceStatus(true);
     }
     
@@ -394,6 +424,9 @@ void setup() {
   pinMode(LED0_PIN, OUTPUT);
   pinMode(LED1_PIN, OUTPUT);
   
+  doorbell_button.begin();
+  doorbell.pin = DOORBELL_PIN;
+
   led0.pin = LED0_PIN;
   led1.pin = LED1_PIN;
 
@@ -421,11 +454,25 @@ void loop() {
   }
   mqtt_client.loop();
 
+  // Read DOORBELL pin
+  if (doorbell_button.toggled()) {
+    if (doorbell_button.read() == Button::PRESSED) {
+      doorbell.state.is_pressed = true;
+    } else {
+      doorbell.state.is_pressed = false;
+    }
+    doorbell.entity.setState(doorbell.state.is_pressed ? "ON" : "OFF");
+  }
+
   // should we update a LED mqtt state ?
   for(size_t i=0; i<leds_count; i++) {
     SMART_LED & led = *leds[i];
     if (led.entity.getState().isDirty()) {
       led.entity.publishMqttState();
     }
+  }
+
+  if (doorbell.entity.getState().isDirty()) {
+    doorbell.entity.publishMqttState();
   }
 }
