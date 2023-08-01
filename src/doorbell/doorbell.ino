@@ -15,31 +15,30 @@
 
 using namespace HaMqttDiscovery;
 
-struct LIGHT_STATE {
+struct LED_STATE {
   bool is_on;
   uint8_t brightness;
 };
 struct SMART_LED {
   uint8_t pin;
   HaMqttEntity entity;
-  LIGHT_STATE state;
+  LED_STATE state;
 };
 
-struct DOORBELL_STATE {
+struct BELL_SENSOR_STATE {
   bool is_pressed;
 };
-struct SMART_DOORBELL {
-  uint8_t pin;
+struct SMART_BELL_SENSOR {
   HaMqttEntity entity;
-  DOORBELL_STATE state;
+  BELL_SENSOR_STATE state;
 };
 
-struct MELODIES_STATE {
+struct MELODY_STATE {
   size_t selected_melody;
 };
-struct SMART_MELODIES {
+struct SMART_MELODY_SELECTOR {
   HaMqttEntity entity;
-  MELODIES_STATE state;
+  MELODY_STATE state;
 };
 
 static const char* melody_names[] = {
@@ -109,9 +108,11 @@ SoftTimer publish_timer; //millisecond timer
 static const char * device_identifier_prefix = "doorbell";
 String device_identifier; // defined as device_identifier_prefix followed by device mac address without ':' characters.
 
-// MQTT variables
+// MQTT support variables
 PubSubClient mqtt_client(wifi_client);
 MqttAdaptorPubSubClient publish_adaptor;
+
+// Home Assistant support variables
 HaMqttDevice this_device;
 
 SMART_LED led0;
@@ -120,9 +121,18 @@ SMART_LED * leds[] = {&led0, &led1};
 size_t leds_count = sizeof(leds)/sizeof(leds[0]);
 
 Button doorbell_button(DOORBELL_PIN);
-SMART_DOORBELL doorbell;
+SMART_BELL_SENSOR doorbell;
 
-SMART_MELODIES melodies;
+SMART_MELODY_SELECTOR melody_selector;
+
+HaMqttEntity * entities[] = {
+  &led0.entity,
+  &led1.entity,
+  &doorbell.entity,
+  &melody_selector.entity,
+};
+size_t entities_count = sizeof(entities)/sizeof(entities[0]);
+
 
 void led_turn_on(size_t led_index, uint8_t brightness = 255) {
   SMART_LED & led = *(leds[led_index]);
@@ -225,7 +235,6 @@ void setup_device() {
   setup_led(1);
 
   // Configure DOORBELL entity attributes
-  doorbell.pin = DOORBELL_PIN;
   doorbell.entity.setIntegrationType(HA_MQTT_BINARY_SENSOR);
   doorbell.entity.setName("BELL");
   doorbell.entity.setStateTopic(device_identifier + "/doorbell/state");
@@ -233,14 +242,14 @@ void setup_device() {
   doorbell.entity.setDevice(&this_device); // this also adds the entity to the device and generates a unique_id based on the first identifier of the device.
   doorbell.entity.setMqttAdaptor(&publish_adaptor);
 
-
-  melodies.entity.setIntegrationType(HA_MQTT_SELECT);
-  melodies.entity.setName("Melodies");
-  melodies.entity.setCommandTopic(device_identifier + "/melodies/set");
-  melodies.entity.setStateTopic(device_identifier + "/melodies/state");
-  melodies.entity.addStaticCStrArray("options", melody_names, melody_names_count);
-  melodies.entity.setDevice(&this_device); // this also adds the entity to the device and generates a unique_id based on the first identifier of the device.
-  melodies.entity.setMqttAdaptor(&publish_adaptor);
+  // Configure MELODY_SELECTOR entity attributes
+  melody_selector.entity.setIntegrationType(HA_MQTT_SELECT);
+  melody_selector.entity.setName("Melody");
+  melody_selector.entity.setCommandTopic(device_identifier + "/melody/set");
+  melody_selector.entity.setStateTopic(device_identifier + "/melody/state");
+  melody_selector.entity.addStaticCStrArray("options", melody_names, melody_names_count);
+  melody_selector.entity.setDevice(&this_device); // this also adds the entity to the device and generates a unique_id based on the first identifier of the device.
+  melody_selector.entity.setMqttAdaptor(&publish_adaptor);
 
 }
 
@@ -338,8 +347,6 @@ void mqtt_subscription_callback(const char* topic, const byte* payload, unsigned
     SMART_LED & led = *leds[i];
 
     if (led.entity.getCommandTopic() == topic) {
-      String json = (const char *)payload;
-
       // Parse json
       DynamicJsonDocument doc(256);
       DeserializationError error = deserializeJson(doc, payload, length);
@@ -368,12 +375,13 @@ void mqtt_subscription_callback(const char* topic, const byte* payload, unsigned
     }
   }
 
-  if (melodies.entity.getCommandTopic() == topic) {
+  // is this a MELODY_SELECTOR command topic ?
+  if (melody_selector.entity.getCommandTopic() == topic) {
     if (printable) {
       size_t melody_name_index = parse_melody_name(payload, length);
       if (melody_name_index != INVALID_MELODY_INDEX) {
-        melodies.state.selected_melody = melody_name_index;
-        melodies.entity.setState(melody_names[melodies.state.selected_melody]);
+        melody_selector.state.selected_melody = melody_name_index;
+        melody_selector.entity.setState(melody_names[melody_selector.state.selected_melody]);
 
         return; // this topic is handled
       }
@@ -423,31 +431,26 @@ void mqtt_reconnect() {
     // Do initialization stuff when we first connect.
     if (mqtt_client.connected()) {
       
+      // Set device as "offline" while we update all entity states.
+      // This will "disable" all entities in Home Assistant while we update.
       this_device.publishMqttDeviceStatus(false);
 
-      for(size_t i=0; i<leds_count; i++) {
-        SMART_LED & led = *leds[i];
+      // Force all entities to update
+      for(size_t i=0; i<entities_count; i++) {
+        HaMqttEntity & entity = *(entities[i]);
 
         // Publish Home Assistant mqtt discovery topic
-        led.entity.publishMqttDiscovery();
-    
+        entity.publishMqttDiscovery();
+
         // Publish entity's state to initialize Home Assistant UI
-        led.entity.getState().setDirty();
-        led.entity.publishMqttState();
+        entity.getState().setDirty();
+        entity.publishMqttState();
 
         // Subscribe to receive entity state change notifications
-        led.entity.subscribe();
+        entity.subscribe();
       }
 
-      doorbell.entity.publishMqttDiscovery();
-      doorbell.entity.getState().setDirty();
-      doorbell.entity.publishMqttState();
-
-      melodies.entity.publishMqttDiscovery();
-      melodies.entity.getState().setDirty();
-      melodies.entity.publishMqttState();
-      melodies.entity.subscribe();
-
+      // Set device as back "online"
       this_device.publishMqttDeviceStatus(true);
     }
     
@@ -509,7 +512,6 @@ void setup() {
   pinMode(LED1_PIN, OUTPUT);
   
   doorbell_button.begin();
-  doorbell.pin = DOORBELL_PIN;
 
   led0.pin = LED0_PIN;
   led1.pin = LED1_PIN;
@@ -526,12 +528,12 @@ void setup() {
     led_turn_off(i); // for initializing led's internal variables
   }
 
-  // Set default values
+  // Set default values for other entities
   doorbell.state.is_pressed = false;
   doorbell.entity.setState("OFF");
 
-  melodies.state.selected_melody = 0;
-  melodies.entity.setState(melody_names[melodies.state.selected_melody]);
+  melody_selector.state.selected_melody = 0;
+  melody_selector.entity.setState(melody_names[melody_selector.state.selected_melody]);
 
   setup_wifi();
   setup_device();
@@ -555,19 +557,11 @@ void loop() {
     doorbell.entity.setState(doorbell.state.is_pressed ? "ON" : "OFF");
   }
 
-  // should we update a LED mqtt state ?
-  for(size_t i=0; i<leds_count; i++) {
-    SMART_LED & led = *leds[i];
-    if (led.entity.getState().isDirty()) {
-      led.entity.publishMqttState();
+  // Publish dirty state of all entities
+  for(size_t i=0; i<entities_count; i++) {
+    HaMqttEntity & entity = *(entities[i]);
+    if (entity.getState().isDirty()) {
+      entity.publishMqttState();
     }
-  }
-
-  if (doorbell.entity.getState().isDirty()) {
-    doorbell.entity.publishMqttState();
-  }
-
-  if (melodies.entity.getState().isDirty()) {
-    melodies.entity.publishMqttState();
   }
 }

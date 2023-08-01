@@ -297,7 +297,8 @@ class HaMqttEntity {
       if (mqtt_adaptor == NULL) return false;
       if (!mqtt_adaptor->connected()) return false;
 
-      if (state_topic.isEmpty()) return false;
+      if (state_topic.isEmpty()) return true; // nothing configured
+
       if (!state.isDirty())
         return true; // nothing to do
 
@@ -353,7 +354,8 @@ class HaMqttEntity {
     bool subscribe() {
       if (mqtt_adaptor == NULL) return false;
       if (!mqtt_adaptor->connected()) return false;
-      if (command_topic.isEmpty()) return false;
+
+      if (command_topic.isEmpty()) return true; // nothing configured
 
       const char * topic = command_topic.c_str();
       bool result = mqtt_adaptor->subscribe(topic);
