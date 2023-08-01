@@ -14,6 +14,12 @@ class HaMqttEntity;
 
 class HaMqttEntity {
   public:
+
+    struct STATIC_CSTR_ARRAY {
+      const char ** values;
+      size_t count;      
+    };
+
     HaMqttEntity() {
         this->device = NULL;
         this->type = HA_MQTT_INTEGRATION_TYPE::HA_MQTT_BINARY_SENSOR;
@@ -158,13 +164,13 @@ class HaMqttEntity {
       KEY_VALUE_PAIR pair;
       pair.key = key;
       pair.value = value;
-      more.push_back(pair);
+      more_string_values.push_back(pair);
     }
     inline void addKeyValue(const char * key, const char * value) { addKeyValue(String(key), String(value)); }
 
     const char * getKeyValue(const String & key) const {
-        for(size_t i=0; i<more.size(); i++) {
-          const KEY_VALUE_PAIR & pair = more[i];
+        for(size_t i=0; i<more_string_values.size(); i++) {
+          const KEY_VALUE_PAIR & pair = more_string_values[i];
           if (pair.key == key)
             return pair.value.c_str();
         }
@@ -172,8 +178,30 @@ class HaMqttEntity {
     }
     const char * getKeyValue(const char * key) const { return getKeyValue(String(key)); }
 
-    inline bool hasKey(const String & key) const { return getKeyValue(key) != NULL; }
-    inline bool hasKey(const char * key) const { return getKeyValue(String(key)) != NULL; }
+    inline bool hasKeyValue(const String & key) const { return getKeyValue(key) != NULL; }
+    inline bool hasKeyValue(const char * key) const { return getKeyValue(String(key)) != NULL; }
+
+    void addStaticCStrArray(const String & key, const char ** values, size_t count) {
+      STATIC_CSTR_ARRAY_ENTRY entry;
+      entry.key = key;
+      entry.the_array.values = values;
+      entry.the_array.count = count;
+      more_static_cstr_entries.push_back(entry);
+    }
+
+    const STATIC_CSTR_ARRAY * getStaticCStrArray(const String & key) const {
+        for(size_t i=0; i<more_static_cstr_entries.size(); i++) {
+          const STATIC_CSTR_ARRAY_ENTRY & entry = more_static_cstr_entries[i];
+          if (entry.key == key)
+            return &entry.the_array;
+        }
+        return NULL;
+    }
+
+    inline bool hasStaticCStr(const String & key) const { return getStaticCStrArray(key) != NULL; }
+    inline bool hasStaticCStr(const char * key) const { return getStaticCStrArray(String(key)) != NULL; }
+
+
 
     void getDiscoveryTopic(String & topic) const {
       if (!unique_id.isEmpty()) {
@@ -193,11 +221,22 @@ class HaMqttEntity {
     void getDiscoveryPayload(String & payload) const {
       DynamicJsonDocument doc(1024);
 
-      for(size_t i=0; i<more.size(); i++) {
-        const KEY_VALUE_PAIR & pair = more[i];
+      // serialize key-value pairs
+      for(size_t i=0; i<more_string_values.size(); i++) {
+        const KEY_VALUE_PAIR & pair = more_string_values[i];
         doc[pair.key] = pair.value;
       };
 
+      // serialize static cstr arrays
+      for(size_t i=0; i<more_static_cstr_entries.size(); i++) {
+        const STATIC_CSTR_ARRAY_ENTRY & entry = more_static_cstr_entries[i];
+        JsonArray json_array = doc.createNestedArray(entry.key.c_str());
+        for(size_t j=0; j<entry.the_array.count; j++) {
+          json_array.add(entry.the_array.values[j]);
+        }
+      }
+
+      // serialize base attributes
       if (!name.isEmpty())
         doc["name"] = name;
       if (!unique_id.isEmpty())
@@ -209,6 +248,7 @@ class HaMqttEntity {
       if (!state_topic.isEmpty())
         doc["state_topic"] = state_topic;
 
+      // serialize device, if any
       if (device) {
         doc["availability_topic"] = device->getAvailabilityTopic();
         doc["payload_available"] = ha_availability_online;
@@ -350,7 +390,15 @@ class HaMqttEntity {
       String value;
     };
     typedef std::vector<KEY_VALUE_PAIR> KeyValuePairVector;
-    KeyValuePairVector more;
+    KeyValuePairVector more_string_values;
+
+    struct STATIC_CSTR_ARRAY_ENTRY {
+      String key;
+      STATIC_CSTR_ARRAY the_array;
+    };
+    typedef std::vector<STATIC_CSTR_ARRAY_ENTRY> StaticCStrArrayVector;
+    StaticCStrArrayVector more_static_cstr_entries;
+    
 };
 
 }; // namespace HaMqttDiscovery
