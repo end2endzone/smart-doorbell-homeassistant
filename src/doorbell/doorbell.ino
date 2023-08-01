@@ -19,7 +19,6 @@ struct LIGHT_STATE {
   bool is_on;
   uint8_t brightness;
 };
-
 struct SMART_LED {
   uint8_t pin;
   HaMqttEntity entity;
@@ -29,14 +28,46 @@ struct SMART_LED {
 struct DOORBELL_STATE {
   bool is_pressed;
 };
-
 struct SMART_DOORBELL {
   uint8_t pin;
   HaMqttEntity entity;
   DOORBELL_STATE state;
 };
 
+struct MELODIES_STATE {
+  size_t selected_melody;
+};
+struct SMART_MELODIES {
+  HaMqttEntity entity;
+  MELODIES_STATE state;
+};
 
+static const char* melody_names[] = {
+  "Take On Me",
+  "Entertainer",
+  "Xfiles",
+  "Looney",
+  "20thCenFox",
+  "Bond",
+  "StarWars",
+  "GoodBad",
+  "Flinstones",
+  "Jeopardy",
+  "Gadget",
+  "MahnaMahna",
+  "LeisureSuit",
+  "MissionImp",
+  "Super Mario Bros. Water",
+  "Super Mario Bros. Death",
+  "tk3jin",
+  "doom_map",
+  "Duke Nukem",
+  "tetris",
+  "Super Mario Bros. 3 Level 1",
+  "Addams",
+};
+static const size_t melody_names_count = sizeof(melody_names) / sizeof(melody_names[0]);
+static const size_t INVALID_MELODY_INDEX = (size_t)-1;
 
 //************************************************************
 //   Predeclarations
@@ -54,7 +85,9 @@ void mqtt_subscription_callback(const char* topic, const byte* payload, unsigned
 void mqtt_reconnect();
 bool parse_boolean(const char * value);
 uint8_t parse_uint8(const char * value);
-
+size_t parse_melody_name(const char * name);
+size_t parse_melody_name(const String & name);
+size_t parse_melody_name(const uint8_t * buffer, size_t length);
 
 //************************************************************
 //   Variables
@@ -88,6 +121,8 @@ size_t leds_count = sizeof(leds)/sizeof(leds[0]);
 
 Button doorbell_button(DOORBELL_PIN);
 SMART_DOORBELL doorbell;
+
+SMART_MELODIES melodies;
 
 void led_turn_on(size_t led_index, uint8_t brightness = 255) {
   SMART_LED & led = *(leds[led_index]);
@@ -193,10 +228,19 @@ void setup_device() {
   doorbell.pin = DOORBELL_PIN;
   doorbell.entity.setIntegrationType(HA_MQTT_BINARY_SENSOR);
   doorbell.entity.setName("BELL");
-  doorbell.entity.setStateTopic(   device_identifier + "/doorbell/state");
+  doorbell.entity.setStateTopic(device_identifier + "/doorbell/state");
   doorbell.entity.addKeyValue("device_class","sound");
   doorbell.entity.setDevice(&this_device); // this also adds the entity to the device and generates a unique_id based on the first identifier of the device.
   doorbell.entity.setMqttAdaptor(&publish_adaptor);
+
+
+  melodies.entity.setIntegrationType(HA_MQTT_SELECT);
+  melodies.entity.setName("Melodies");
+  melodies.entity.setCommandTopic(device_identifier + "/melodies/set");
+  melodies.entity.setStateTopic(device_identifier + "/melodies/state");
+  melodies.entity.addStaticCStrArray("options", melody_names, melody_names_count);
+  melodies.entity.setDevice(&this_device); // this also adds the entity to the device and generates a unique_id based on the first identifier of the device.
+  melodies.entity.setMqttAdaptor(&publish_adaptor);
 
 }
 
@@ -280,7 +324,8 @@ void mqtt_subscription_callback(const char* topic, const byte* payload, unsigned
   Serial.print(" bytes. topic=");
   Serial.print(topic);
 
-  if (!is_printable(payload, length)) {
+  bool printable = is_printable(payload, length);
+  if (!printable) {
     Serial.println();
   } else {
     Serial.print(" payload=");
@@ -320,6 +365,18 @@ void mqtt_subscription_callback(const char* topic, const byte* payload, unsigned
         led_turn_off(i);
 
       return; // this topic is handled
+    }
+  }
+
+  if (melodies.entity.getCommandTopic() == topic) {
+    if (printable) {
+      size_t melody_name_index = parse_melody_name(payload, length);
+      if (melody_name_index != INVALID_MELODY_INDEX) {
+        melodies.state.selected_melody = melody_name_index;
+        melodies.entity.setState(melody_names[melodies.state.selected_melody]);
+
+        return; // this topic is handled
+      }
     }
   }
 
@@ -383,9 +440,13 @@ void mqtt_reconnect() {
       }
 
       doorbell.entity.publishMqttDiscovery();
-      doorbell.state.is_pressed = false;
-      doorbell.entity.setState("OFF");
+      doorbell.entity.getState().setDirty();
       doorbell.entity.publishMqttState();
+
+      melodies.entity.publishMqttDiscovery();
+      melodies.entity.getState().setDirty();
+      melodies.entity.publishMqttState();
+      melodies.entity.subscribe();
 
       this_device.publishMqttDeviceStatus(true);
     }
@@ -420,6 +481,29 @@ uint8_t parse_uint8(const char * value) {
   return numeric_value;
 }
 
+size_t parse_melody_name(const char * name) { return parse_melody_name(String(name)); }
+size_t parse_melody_name(const String & name) {
+  for(size_t i=0; i<melody_names_count; i++) {
+    const char * melody = melody_names[i];
+    if (name == melody) {
+      return i;
+    }
+  }
+  return INVALID_MELODY_INDEX;
+}
+size_t parse_melody_name(const uint8_t * buffer, size_t length) {
+  if (length == 0)
+    return INVALID_MELODY_INDEX;
+  
+  String test;
+  test.reserve(length+1);
+  
+  for(size_t i=0; i<length; i++)
+    test += (char)buffer[i];
+  
+  return parse_melody_name(test);
+}
+
 void setup() {
   pinMode(LED0_PIN, OUTPUT);
   pinMode(LED1_PIN, OUTPUT);
@@ -441,7 +525,14 @@ void setup() {
     led.state.brightness = 255;
     led_turn_off(i); // for initializing led's internal variables
   }
-  
+
+  // Set default values
+  doorbell.state.is_pressed = false;
+  doorbell.entity.setState("OFF");
+
+  melodies.state.selected_melody = 0;
+  melodies.entity.setState(melody_names[melodies.state.selected_melody]);
+
   setup_wifi();
   setup_device();
   setup_mqtt();
@@ -474,5 +565,9 @@ void loop() {
 
   if (doorbell.entity.getState().isDirty()) {
     doorbell.entity.publishMqttState();
+  }
+
+  if (melodies.entity.getState().isDirty()) {
+    melodies.entity.publishMqttState();
   }
 }
