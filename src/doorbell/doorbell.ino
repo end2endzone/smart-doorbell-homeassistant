@@ -3,6 +3,10 @@
 #include <SoftTimers.h>     // https://www.arduino.cc/reference/en/libraries/softtimers/
 #include <ArduinoJson.h>    // https://www.arduino.cc/reference/en/libraries/arduinojson/
 #include <Button.h>         // https://www.arduino.cc/reference/en/libraries/button/
+#include <anyrtttl.h>       // https://www.arduino.cc/reference/en/libraries/anyrtttl/
+#include <binrtttl.h>       // https://www.arduino.cc/reference/en/libraries/anyrtttl/
+#include <pitches.h>        // https://www.arduino.cc/reference/en/libraries/anyrtttl/
+
 
 #include <strings.h>  // for strcasecmp
 #include <cctype>     //for isprint
@@ -41,31 +45,61 @@ struct SMART_MELODY_SELECTOR {
   MELODY_STATE state;
 };
 
-static const char* melody_names[] = {
-  "Take On Me",
-  "Entertainer",
-  "Xfiles",
-  "Looney",
-  "20thCenFox",
-  "Bond",
-  "StarWars",
-  "GoodBad",
-  "Flinstones",
-  "Jeopardy",
-  "Gadget",
-  "MahnaMahna",
-  "LeisureSuit",
-  "MissionImp",
-  "Super Mario Bros. Water",
-  "Super Mario Bros. Death",
-  "tk3jin",
-  "doom_map",
-  "Duke Nukem",
-  "tetris",
-  "Super Mario Bros. 3 Level 1",
-  "Addams",
+const char melody00[] PROGMEM = "None:d=4,o=5,b=125:1p";
+const char melody01[] PROGMEM = "Axel F:d=4,o=5,b=125:g,8a#.,16g,16p,16g,8c6,8g,8f,g,8d.6,16g,16p,16g,8d#6,8d6,8a#,8g,8d6,8g6,16g,16f,16p,16f,8d,8a#,2g,p,16f6,8d6,8c6,8a#,g,8a#.,16g,16p,16g,8c6,8g,8f,g,8d.6,16g,16p,16g,8d#6,8d6,8a#,8g,8d6,8g6,16g,16f,16p,16f,8d,8a#,2g";
+const char melody02[] PROGMEM = "Cantina:d=4,o=5,b=250:8a,8p,8d6,8p,8a,8p,8d6,8p,8a,8d6,8p,8a,8p,8g#,a,8a,8g#,8a,g,8f#,8g,8f#,f.,8d.,16p,p.,8a,8p,8d6,8p,8a,8p,8d6,8p,8a,8d6,8p,8a,8p,8g#,8a,8p,8g,8p,g.,8f#,8g,8p,8c6,a#,a,g";
+const char melody03[] PROGMEM = "Coca cola:d=4,o=5,b=125:8f#6,8f#6,8f#6,8f#6,g6,8f#6,e6,8e6,8a6,f#6,d6,2p";
+const char melody04[] PROGMEM = "Final Countdown:d=4,o=5,b=125:p,8p,16b,16a,b,e,p,8p,16c6,16b,8c6,8b,a,p,8p,16c6,16b,c6,e,p,8p,16a,16g,8a,8g,8f#,8a,g.,16f#,16g,a.,16g,16a,8b,8a,8g,8f#,e,c6,2b.,16b,16c6,16b,16a,1b";
+const char melody05[] PROGMEM = "Doom map:d=4,o=5,b=80:16e4,16g4,16e4,16e4,16e4,16f#4,16e4,16e4,16e4,16a#4,16e4,16a4,16e4,16g4,16e4,16e4,16e4,16g4,16e4,16e4,16e4,16f#4,16e4,16e4,16e4,16a#4,16e4,16a4,16e4,16g4,16e4,16f#4,16g4,16a#4,16g4,16g4,16g4,16c,16g4,16g4,16g4,16c#,16g4,16c,16g4,16a#4,16g4,16g4,16g4,16a#4,16g4,16g4,16g4,16c,16g4,16g4,16g4,16c#,16g4,16c,16g4,8a#4";
+const char melody06[] PROGMEM = "Duke Nukem:d=4,o=5,b=90:16f#4,16a4,16p,16b4,8p,16f#4,16b4,16p,16c#,8p,16f#4,16c#,16p,16d,16p,16f#4,16p,8c#,16b4,16a4,16f#4,16e4,16f4,16f#4,16g4,16b4,16a4,16g4,16f#4,16a4,16p,16f#4,16a4,16p,16b4,8p,16f#4,16b4,16p,16c#,8p,16f#4,16c#,16p,16d,16p,16f#4,16p,8c#,16b4,16a4,16f#4,16e4,16f4,16f#4,16g4,16b4,16a4,16g4,16f#4,16a4";
+const char melody07[] PROGMEM = "Entertainer:d=4,o=5,b=140:8d,8d#,8e,c6,8e,c6,8e,2c.6,8c6,8d6,8d#6,8e6,8c6,8d6,e6,8b,d6,2c6,p,8d,8d#,8e,c6,8e,c6,8e,2c.6,8p,8a,8g,8f#,8a,8c6,e6,8d6,8c6,8a,2d6";;
+const char melody08[] PROGMEM = "Flintstones:d=4,o=5,b=200:g#,c#,8p,c#6,8a#,g#,c#,8p,g#,8f#,8f,8f,8f#,8g#,c#,d#,2f,2p,g#,c#,8p,c#6,8a#,g#,c#,8p,g#,8f#,8f,8f,8f#,8g#,c#,d#,2c#";
+const char melody09[] PROGMEM = "Funky Town:d=4,o=4,b=125:8c6,8c6,8a#5,8c6,8p,8g5,8p,8g5,8c6,8f6,8e6,8c6,2p,8c6,8c6,8a#5,8c6,8p,8g5,8p,8g5,8c6,8f6,8e6,8c6";
+const char melody10[] PROGMEM = "GoodBad:d=4,o=5,b=56:32p,32a#,32d#6,32a#,32d#6,8a#.,16f#.,16g#.,d#,32a#,32d#6,32a#,32d#6,8a#.,16f#.,16g#.,c#6,32a#,32d#6,32a#,32d#6,8a#.,16f#.,32f.,32d#.,c#,32a#,32d#6,32a#,32d#6,8a#.,16g#.,d#";
+const char melody11[] PROGMEM = "Itchy:d=4,o=5,b=160:8c6,8a,p,8c6,8a6,p,8c6,8a,8c6,8a,8c6,8a6,p,8p,8c6,8d6,8e6,8p,8e6,8f6,8g6,p,8d6,8c6,d6,8f6,a#6,a6,2c7";
+const char melody12[] PROGMEM = "Mission 2:d=4,o=6,b=100:32d,32d#,32d,32d#,32d,32d#,32d,32d#,32d,32d,32d#,32e,32f,32f#,32g,16g,8p,16g,8p,16a#,16p,16b,16p,16g,8p,16g,8p,16f,16p,16f#,16p,16g,8p,16g,8p,16a#,16p,16b,16p,16g,8p,16g,8p,16f,16p,16f#,16p,16a#,16g,2d,32p,16a#,16g,2c#,32p,16a#,16g,2c,16p,16a#5,16c";
+const char melody13[] PROGMEM = "MissionImp:d=16,o=6,b=95:32d,32d#,32d,32d#,32d,32d#,32d,32d#,32d,32d,32d#,32e,32f,32f#,32g,g,8p,g,8p,a#,p,c7,p,g,8p,g,8p,f,p,f#,p,g,8p,g,8p,a#,p,c7,p,g,8p,g,8p,f,p,f#,p,a#,g,2d,32p,a#,g,2c#,32p,a#,g,2c,a#5,8c,2p,32p,a#5,g5,2f#,32p,a#5,g5,2f,32p,a#5,g5,2e,d#,8d";
+const char melody14[] PROGMEM = "Super Mario Bros. 1:d=4,o=5,b=100:16e6,16e6,32p,8e6,16c6,8e6,8g6,8p,8g,8p,8c6,16p,8g,16p,8e,16p,8a,8b,16a#,8a,16g.,16e6,16g6,8a6,16f6,8g6,8e6,16c6,16d6,8b,16p,8c6,16p,8g,16p,8e,16p,8a,8b,16a#,8a,16g.,16e6,16g6,8a6,16f6,8g6,8e6,16c6,16d6,8b,8p,16g6,16f#6,16f6,16d#6,16p,16e6,16p,16g#,16a,16c6,16p,16a,16c6,16d6,8p,16g6,16f#6,16f6,16d#6,16p,16e6,16p,16c7,16p,16c7,16c7,p,16g6,16f#6,16f6,16d#6,16p,16e6,16p,16g#,16a,16c6,16p,16a,16c6,16d6,8p,16d#6,8p,16d6,8p,16c6";
+const char melody15[] PROGMEM = "Super Mario Bros. 3 Level 1:d=4,o=5,b=80:16g,32c,16g.,16a,32c,16a.,16b,32c,16b,16a.,32g#,16a.,16g,32c,16g.,16a,32c,16a,4b.,32p,16c6,32f,16c.6,16d6,32f,16d.6,16e6,32f,16e6,16d.6,32c#6,16d.6,16c6,32f,16c.6,16d6,32f,16d6,4e.6,32p,16g,32c,16g.,16a,32c,16a.,16b,32c,16b,16a.,32g#,16a.,16c6,8c.6,32p,16c6,4c.6";
+const char melody16[] PROGMEM = "Super Mario Bros. Death:d=4,o=5,b=90:32c6,32c6,32c6,8p,16b,16f6,16p,16f6,16f.6,16e.6,16d6,16c6,16p,16e,16p,16c";
+const char melody17[] PROGMEM = "Super Mario Bros. Underground:d=16,o=6,b=100:c,c5,a5,a,a#5,a#,2p,8p,c,c5,a5,a,a#5,a#,2p,8p,f5,f,d5,d,d#5,d#,2p,8p,f5,f,d5,d,d#5,d#,2p,32d#,d,32c#,c,p,d#,p,d,p,g#5,p,g5,p,c#,p,32c,f#,32f,32e,a#,32a,g#,32p,d#,b5,32p,a#5,32p,a5,g#5";
+const char melody18[] PROGMEM = "Super Mario Bros. Water:d=8,o=6,b=250:4d5,4e5,4f#5,4g5,4a5,4a#5,b5,b5,b5,p,b5,p,2b5,p,g5,2e.,2d#.,2e.,p,g5,a5,b5,c,d,2e.,2d#,4f,2e.,2p,p,g5,2d.,2c#.,2d.,p,g5,a5,b5,c,c#,2d.,2g5,4f,2e.,2p,p,g5,2g.,2g.,2g.,4g,4a,p,g,2f.,2f.,2f.,4f,4g,p,f,2e.,4a5,4b5,4f,e,e,4e.,b5,2c.";
+const char melody19[] PROGMEM = "Smoke:d=4,o=5,b=112:c,d#,f.,c,d#,8f#,f,p,c,d#,f.,d#,c,2p,8p,c,d#,f.,c,d#,8f#,f,p,c,d#,f.,d#,c,p";
+const char melody20[] PROGMEM = "StarWars:d=4,o=5,b=45:32p,32f#,32f#,32f#,8b.,8f#.6,32e6,32d#6,32c#6,8b.6,16f#.6,32e6,32d#6,32c#6,8b.6,16f#.6,32e6,32d#6,32e6,8c#.6,32f#,32f#,32f#,8b.,8f#.6,32e6,32d#6,32c#6,8b.6,16f#.6,32e6,32d#6,32c#6,8b.6,16f#.6,32e6,32d#6,32e6,8c#6";
+const char melody21[] PROGMEM = "Sweet Child:d=8,o=5,b=140:d,d6,a,g,g6,a,f#6,a,d,d6,a,g,g6,a,f#6,a,e,d6,a,g,g6,a,f#6,a,e,d6,a,g,g6,a,f#6,a";
+const char melody22[] PROGMEM = "TopGun:d=4,o=4,b=31:32p,16c#,16g#,16g#,32f#,32f,32f#,32f,16d#,16d#,32c#,32d#,16f,32d#,32f,16f#,32f,32c#,16f,d#,16c#,16g#,16g#,32f#,32f,32f#,32f,16d#,16d#,32c#,32d#,16f,32d#,32f,16f#,32f,32c#,g#";
+const char melody23[] PROGMEM = "20thCenFox:d=16,o=5,b=140:b,8p,b,b,2b,p,c6,32p,b,32p,c6,32p,b,32p,c6,32p,b,8p,b,b,b,32p,b,32p,b,32p,b,32p,b,32p,b,32p,b,32p,g#,32p,a,32p,b,8p,b,b,2b,4p,8e,8g#,8b,1c#6,8f#,8a,8c#6,1e6,8a,8c#6,8e6,1e6,8b,8g#,8a,2b";
+const char melody24[] PROGMEM = "XFiles:d=4,o=5,b=125:e,b,a,b,d6,2b.,1p,e,b,a,b,e6,2b.,1p,g6,f#6,e6,d6,e6,2b.,1p,g6,f#6,e6,d6,f#6,2b.,1p,e,b,a,b,d6,2b.,1p,e,b,a,b,e6,2b.,1p,e6,2b.";
+
+static const char* melodies_array[] = {
+  melody00,
+  melody01,
+  melody02,
+  melody03,
+  melody04,
+  melody05,
+  melody06,
+  melody07,
+  melody08,
+  melody09,
+  melody10,
+  melody11,
+  melody12,
+  melody13,
+  melody14,
+  melody15,
+  melody16,
+  melody17,
+  melody18,
+  melody19,
+  melody20,
+  melody21,
+  melody22,
+  melody23,
+  melody24,
 };
-static const size_t melody_names_count = sizeof(melody_names) / sizeof(melody_names[0]);
+static const size_t melodies_array_count = sizeof(melodies_array) / sizeof(melodies_array[0]);
+static const char* melody_names[melodies_array_count] = {0};
 static const size_t INVALID_MELODY_INDEX = (size_t)-1;
 
 //************************************************************
@@ -73,6 +107,7 @@ static const size_t INVALID_MELODY_INDEX = (size_t)-1;
 //************************************************************
 
 void setup();
+void setup_melody_names();
 void setup_wifi();
 void setup_device();
 void setup_led(size_t led_index);
@@ -84,9 +119,11 @@ void mqtt_subscription_callback(const char* topic, const byte* payload, unsigned
 void mqtt_reconnect();
 bool parse_boolean(const char * value);
 uint8_t parse_uint8(const char * value);
-size_t parse_melody_name(const char * name);
-size_t parse_melody_name(const String & name);
-size_t parse_melody_name(const uint8_t * buffer, size_t length);
+size_t find_melody_by_name(const char * name);
+size_t find_melody_by_name(const String & name);
+size_t find_melody_by_name(const uint8_t * buffer, size_t length);
+void extract_melody_name(const __FlashStringHelper* str, String & name);
+void extract_melody_name(size_t index, String & name);
 
 //************************************************************
 //   Variables
@@ -101,9 +138,11 @@ const char* mqtt_pass = SECRET_MQTT_PASS;
 static const uint8_t LED0_PIN = 2;
 static const uint8_t LED1_PIN = 16;
 static const uint8_t DOORBELL_PIN = D5;
+static const uint8_t BUZZER_PIN = D1;
 
 WiFiClient wifi_client;
 SoftTimer publish_timer; //millisecond timer
+SoftTimer melody_disabled_timer; //millisecond timer
 
 static const char * device_identifier_prefix = "doorbell";
 String device_identifier; // defined as device_identifier_prefix followed by device mac address without ':' characters.
@@ -174,6 +213,20 @@ void led_turn_off(size_t led_index) {
   Serial.print("Set LED-");
   Serial.print(led_index);
   Serial.println(" off");
+}
+
+void setup_melody_names() {
+  for(size_t i=0; i<melodies_array_count; i++) {
+    // Find the name of this rtttl melody
+    String name;
+    extract_melody_name(i, name);
+    Serial.print("Found melody ");
+    Serial.print(String(i));
+    Serial.print(": ");
+    Serial.println(name);
+
+    melody_names[i] = strdup(name.c_str());
+  }
 }
 
 void setup_wifi() {
@@ -247,7 +300,7 @@ void setup_device() {
   melody_selector.entity.setName("Melody");
   melody_selector.entity.setCommandTopic(device_identifier + "/melody/set");
   melody_selector.entity.setStateTopic(device_identifier + "/melody/state");
-  melody_selector.entity.addStaticCStrArray("options", melody_names, melody_names_count);
+  melody_selector.entity.addStaticCStrArray("options", melody_names, melodies_array_count);
   melody_selector.entity.setDevice(&this_device); // this also adds the entity to the device and generates a unique_id based on the first identifier of the device.
   melody_selector.entity.setMqttAdaptor(&publish_adaptor);
 
@@ -378,7 +431,7 @@ void mqtt_subscription_callback(const char* topic, const byte* payload, unsigned
   // is this a MELODY_SELECTOR command topic ?
   if (melody_selector.entity.getCommandTopic() == topic) {
     if (printable) {
-      size_t melody_name_index = parse_melody_name(payload, length);
+      size_t melody_name_index = find_melody_by_name(payload, length);
       if (melody_name_index != INVALID_MELODY_INDEX) {
         melody_selector.state.selected_melody = melody_name_index;
         melody_selector.entity.setState(melody_names[melody_selector.state.selected_melody]);
@@ -484,9 +537,9 @@ uint8_t parse_uint8(const char * value) {
   return numeric_value;
 }
 
-size_t parse_melody_name(const char * name) { return parse_melody_name(String(name)); }
-size_t parse_melody_name(const String & name) {
-  for(size_t i=0; i<melody_names_count; i++) {
+size_t find_melody_by_name(const char * name) { return find_melody_by_name(String(name)); }
+size_t find_melody_by_name(const String & name) {
+  for(size_t i=0; i<melodies_array_count; i++) {
     const char * melody = melody_names[i];
     if (name == melody) {
       return i;
@@ -494,7 +547,7 @@ size_t parse_melody_name(const String & name) {
   }
   return INVALID_MELODY_INDEX;
 }
-size_t parse_melody_name(const uint8_t * buffer, size_t length) {
+size_t find_melody_by_name(const uint8_t * buffer, size_t length) {
   if (length == 0)
     return INVALID_MELODY_INDEX;
   
@@ -504,13 +557,38 @@ size_t parse_melody_name(const uint8_t * buffer, size_t length) {
   for(size_t i=0; i<length; i++)
     test += (char)buffer[i];
   
-  return parse_melody_name(test);
+  return find_melody_by_name(test);
 }
+
+void extract_melody_name(const __FlashStringHelper* str, String & name) {
+  name.clear();
+  if (str == NULL)
+    return;
+
+  const char * buffer = (const char *)str; // temporary storage type to allow buffer++
+  char c;
+  c = pgm_read_byte_near(buffer);
+  while(c != '\0' && c != ':') {
+    name += c;
+    buffer++;
+    c = pgm_read_byte_near(buffer);
+  }
+}
+
+void extract_melody_name(size_t index, String & name) {
+  name.clear();
+  if (index >= melodies_array_count)
+    return;
+  const char * melody = melodies_array[index];
+  extract_melody_name((const __FlashStringHelper*)melody, name);
+}
+
 
 void setup() {
   pinMode(LED0_PIN, OUTPUT);
   pinMode(LED1_PIN, OUTPUT);
-  
+  pinMode(BUZZER_PIN, OUTPUT);
+
   doorbell_button.begin();
 
   led0.pin = LED0_PIN;
@@ -536,8 +614,15 @@ void setup() {
   melody_selector.entity.setState(melody_names[melody_selector.state.selected_melody]);
 
   setup_wifi();
+  setup_melody_names();
   setup_device();
   setup_mqtt();
+
+  // setup a timer to prevent starting a new melody
+  melody_disabled_timer.setTimeOutTime(1);
+  melody_disabled_timer.reset();  //start counting now
+  delay(10); // set our timer to be in "timed out" state.
+  melody_disabled_timer.setTimeOutTime(2500);
 }
 
 void loop() {
@@ -555,6 +640,25 @@ void loop() {
       doorbell.state.is_pressed = false;
     }
     doorbell.entity.setState(doorbell.state.is_pressed ? "ON" : "OFF");
+  }
+
+  // Should we start a melody?
+  if (doorbell.entity.getState().isDirty() &&
+      melody_selector.state.selected_melody < melodies_array_count &&
+      melody_disabled_timer.hasTimedOut() &&
+      !anyrtttl::nonblocking::isPlaying())
+  {
+    const char * selected_melodies_array = melodies_array[melody_selector.state.selected_melody];
+    anyrtttl::nonblocking::begin_P(BUZZER_PIN, selected_melodies_array);
+
+    // Update our timer
+    melody_disabled_timer.reset();  //start counting now
+  }
+
+  // If we are playing something, keep playing! 
+  if ( anyrtttl::nonblocking::isPlaying() )
+  {
+    anyrtttl::nonblocking::play();
   }
 
   // Publish dirty state of all entities
