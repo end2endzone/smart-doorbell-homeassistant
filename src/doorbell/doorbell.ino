@@ -45,6 +45,53 @@ struct SMART_MELODY_SELECTOR {
   MELODY_STATE state;
 };
 
+//************************************************************
+//   Variables
+//************************************************************
+
+const char * wifi_ssid = SECRET_WIFI_SSID;
+const char * wifi_pass = SECRET_WIFI_PASS;
+const char* mqtt_server = SECRET_MQTT_HOST;
+const char* mqtt_user = SECRET_MQTT_USER;
+const char* mqtt_pass = SECRET_MQTT_PASS;
+
+static const uint8_t LED0_PIN = 2;
+static const uint8_t LED1_PIN = 16;
+static const uint8_t DOORBELL_PIN = D5;
+static const uint8_t BUZZER_PIN = D1;
+
+WiFiClient wifi_client;
+SoftTimer publish_timer; //millisecond timer
+SoftTimer melody_disabled_timer; //millisecond timer
+
+static const char * device_identifier_prefix = "doorbell";
+String device_identifier; // defined as device_identifier_prefix followed by device mac address without ':' characters.
+
+// MQTT support variables
+PubSubClient mqtt_client(wifi_client);
+MqttAdaptorPubSubClient publish_adaptor;
+
+// Home Assistant support variables
+HaMqttDevice this_device;
+
+SMART_LED led0;
+SMART_LED led1;
+SMART_LED * leds[] = {&led0, &led1};
+size_t leds_count = sizeof(leds)/sizeof(leds[0]);
+
+Button doorbell_button(DOORBELL_PIN);
+SMART_BELL_SENSOR doorbell;
+
+SMART_MELODY_SELECTOR melody_selector;
+
+HaMqttEntity * entities[] = {
+  &led0.entity,
+  &led1.entity,
+  &doorbell.entity,
+  &melody_selector.entity,
+};
+size_t entities_count = sizeof(entities)/sizeof(entities[0]);
+
 const char melody00[] PROGMEM = "None:d=4,o=5,b=125:1p";
 const char melody01[] PROGMEM = "Axel F:d=4,o=5,b=125:g,8a#.,16g,16p,16g,8c6,8g,8f,g,8d.6,16g,16p,16g,8d#6,8d6,8a#,8g,8d6,8g6,16g,16f,16p,16f,8d,8a#,2g,p,16f6,8d6,8c6,8a#,g,8a#.,16g,16p,16g,8c6,8g,8f,g,8d.6,16g,16p,16g,8d#6,8d6,8a#,8g,8d6,8g6,16g,16f,16p,16f,8d,8a#,2g";
 const char melody02[] PROGMEM = "Cantina:d=4,o=5,b=250:8a,8p,8d6,8p,8a,8p,8d6,8p,8a,8d6,8p,8a,8p,8g#,a,8a,8g#,8a,g,8f#,8g,8f#,f.,8d.,16p,p.,8a,8p,8d6,8p,8a,8p,8d6,8p,8a,8d6,8p,8a,8p,8g#,8a,8p,8g,8p,g.,8f#,8g,8p,8c6,a#,a,g";
@@ -126,52 +173,8 @@ void extract_melody_name(const __FlashStringHelper* str, String & name);
 void extract_melody_name(size_t index, String & name);
 
 //************************************************************
-//   Variables
+//   Function definitions
 //************************************************************
-
-const char * wifi_ssid = SECRET_WIFI_SSID;
-const char * wifi_pass = SECRET_WIFI_PASS;
-const char* mqtt_server = SECRET_MQTT_HOST;
-const char* mqtt_user = SECRET_MQTT_USER;
-const char* mqtt_pass = SECRET_MQTT_PASS;
-
-static const uint8_t LED0_PIN = 2;
-static const uint8_t LED1_PIN = 16;
-static const uint8_t DOORBELL_PIN = D5;
-static const uint8_t BUZZER_PIN = D1;
-
-WiFiClient wifi_client;
-SoftTimer publish_timer; //millisecond timer
-SoftTimer melody_disabled_timer; //millisecond timer
-
-static const char * device_identifier_prefix = "doorbell";
-String device_identifier; // defined as device_identifier_prefix followed by device mac address without ':' characters.
-
-// MQTT support variables
-PubSubClient mqtt_client(wifi_client);
-MqttAdaptorPubSubClient publish_adaptor;
-
-// Home Assistant support variables
-HaMqttDevice this_device;
-
-SMART_LED led0;
-SMART_LED led1;
-SMART_LED * leds[] = {&led0, &led1};
-size_t leds_count = sizeof(leds)/sizeof(leds[0]);
-
-Button doorbell_button(DOORBELL_PIN);
-SMART_BELL_SENSOR doorbell;
-
-SMART_MELODY_SELECTOR melody_selector;
-
-HaMqttEntity * entities[] = {
-  &led0.entity,
-  &led1.entity,
-  &doorbell.entity,
-  &melody_selector.entity,
-};
-size_t entities_count = sizeof(entities)/sizeof(entities[0]);
-
 
 void led_turn_on(size_t led_index, uint8_t brightness = 255) {
   SMART_LED & led = *(leds[led_index]);
@@ -551,12 +554,13 @@ size_t find_melody_by_name(const uint8_t * buffer, size_t length) {
   if (length == 0)
     return INVALID_MELODY_INDEX;
   
+  // Build a valid String from the first 'length' bytes of the given buffer
   String test;
   test.reserve(length+1);
-  
   for(size_t i=0; i<length; i++)
     test += (char)buffer[i];
-  
+
+  // Now search using a String
   return find_melody_by_name(test);
 }
 
