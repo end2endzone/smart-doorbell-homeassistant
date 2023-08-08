@@ -219,7 +219,7 @@ class HaMqttDevice {
         HA_MQTT_DISCOVERY_PRINT_FUNC(payload);
         HA_MQTT_DISCOVERY_PRINT_FUNC("\n");     
       } else {
-        HA_MQTT_DISCOVERY_PRINT_FUNC("MQTT publish failure: topic=");
+        HA_MQTT_DISCOVERY_PRINT_FUNC(error_message_prefix + "MQTT publish failure: topic=");
         HA_MQTT_DISCOVERY_PRINT_FUNC(topic);
         HA_MQTT_DISCOVERY_PRINT_FUNC("\n");     
       }

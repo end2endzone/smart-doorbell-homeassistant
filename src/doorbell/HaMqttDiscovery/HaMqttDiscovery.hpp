@@ -10,6 +10,7 @@ namespace HaMqttDiscovery {
 static String ha_discovery_prefix = "homeassistant";
 static String ha_availability_online = "online";
 static String ha_availability_offline = "offline";
+static String error_message_prefix = "";
 
 enum HA_MQTT_INTEGRATION_TYPE {
     HA_MQTT_ALARM_CONTROL_PANEL ,
