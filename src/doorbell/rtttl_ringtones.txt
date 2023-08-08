@@ -1,0 +1,17 @@
+Fido1:d=16,o=6,b=800:f,4p,f,4p,f,4p,f,4p,c,4p,c,4p,c,4p,c,1p,1p,1p,1p
+Fido2:d=8,o=7,b=500:f,f6,f,f6,f,f6,c,c6,c,c6,c,c6,c,c6,c,2p
+Hummingbird:d=16,o=5,b=960:d#6.,p,c6,32p,d#6.,p,c6,4p,d#6,4p.,d#6.,p,c6,32p,d#6.,p,c6,4p,d#6.,p,c6,32p,d#6.,p,c6,4p,c,4p.,d#6.,p,c6,32p,d#6.,p,c6,4p,d#6,4p.,d#6.,p,c6,32p,d#6.,p,c6,4p,d#6.,p,c6,32p,d#6.,p,c6,4p,c,4p.,d6.,p,c6,32p,d6.,p,c6,4p,d6,4p.,d6.,p,c6,32p,d6.,p,c6,4p,d6.,p,c6,32p,d6.,p,c6,4p,c,4p.,d6.,p,c6,32p,d6.,p,c6,4p,d6,4p.,d6.,p,c6,32p,d6.,p,c6,4p,d6.,p,c6,32p,d6.,p,c6,4p,c,4p.,a#.,p,g,32p,a#.,p,g,4p,a#,4p.,a#.,p,g,32p,a#.,p,g,4p,a#.,p,g,32p,a#.,p,g,4p,g4,4p.,a#.,p,g,32p,a#.,p,g,4p,a#,4p.,a#.,p,g,32p,a#.,p,g,4p,a#.,p,g,32p,a#.,p,g,4p,g4,4p.,g#.,p,f,32p,g#.,p,f,4p,g#,4p.,g#.,p,f,32p,g#.,p,f,4p,g#.,p,f,32p,g#.,p,f,4p,f4,4p.,g#.,p,f,32p,g#.,p,f,4p,g#,4p.,g#.,p,f,32p,g#.,p,f,4p,g#.,p,f,32p,g#.,p,f,1p.,d#6.,p,c6,32p,d#6.,p,c6,4p,d#6,4p.,d#6.,p,c6,32p,d#6.,p,c6,4p,d#6.,p,c6,32p,d#6.,p,c6,4p,c,4p.,d#6.,p,c6,32p,d#6.,p,c6,4p,d#6,4p.,d#6.,p,c6,32p,d#6.,p,c6,4p,d#6.,p,c6,32p,d#6.,p,c6,4p,c,4p.,d6.,p,c6,32p,d6.,p,c6,4p,d6,4p.,d6.,p,c6,32p,d6.,p,c6,4p,d6.,p,c6,32p,d6.,p,c6,4p,c,4p.,d6.,p,c6,32p,d6.,p,c6,4p,d6,4p.,d6.,p,c6,32p,d6.,p,c6,4p,d6.,p,c6,32p,d6.,p,c6,4p,c,4p.,a#.,p,g,32p,a#.,p,g,4p,a#,4p.,a#.,p,g,32p,a#.,p,g,4p,a#.,p,g,32p,a#.,p,g,4p,g4,4p.,a#.,p,g,32p,a#.,p,g,4p,a#,4p.,a#.,p,g,32p,a#.,p,g,4p,a#.,p,g,32p,a#.,p,g,4p,g4,4p.,g#.,p,f,32p,g#.,p,f,4p,g#,4p.,g#.,p,f,32p,g#.,p,f,4p,g#.,p,f,32p,g#.,p,f,4p,f4,4p.,g#.,p,f,32p,g#.,p,f,4p,g#,4p.,g#.,p,f,32p,g#.,p,f,4p,g#.,p,f,32p,g#.,p,f
+Intel:d=16,o=5,b=320:d,p,d,p,d,p,g,p,g,p,g,p,d,p,d,p,d,p,a,p,a,p,a,2p
+Kick:d=32,o=6,b=193,l=15:8a#4,p,a#,16p,a#,16p,8g#4 ,p,a#,8p,8f#4,p,a#,16p,a#,16p,8f4,8p.,a#,16p,a#,16p,8a#4,p,8g#4,p, a#,8p,8f#4,p,a#,16p,a#,16p,4f4,2p,1p.,8p.,8a#4,p,a#,16p,a#,16p, 8g#4,p,a#,8p,8f#4,p,a#,16p,a#,16p,8f4,8p.,a#,16p,a#,16p,8a#4,p, 8g#4,p,a#,8p,8f#4,p,a#,16p,a#,16p,4f4,2p,1p.
+Mosaic-long:d=8,o=6,b=400:c,e,g,e,c,g,e,g,c,g,c,e,c,g,e,g,e,c,p,c5,e5,g5,e5,c5,g5,e5,g5,c5,g5,c5,e5,c5,g5,e5,g5,e5,c5
+Mosaic-short:d=8,o=6,b=400:c,e,g,e,c,g,e,g,c,g,c,e,c,g,e,g,e,c
+Nokia:d=4,o=4,b=180:8e5,8d5,f#,g#,8c#5,8b,d,e,8b,8a,c#,e,2a
+Ring High:d=16,o=6,b=350:b5,d,b5,d,b5,d,b5,d,d,f,d,f,d,f,d,f,f,a,f,a,f,a,f,a.
+Ring Low:d=16,o=5,b=355:b4,d,b4,d,b4,d,b4,d,d,f,d,f,d,f,d,f,f,a,f,a,f,a,f,a
+Robo N1X:d=32,o=6,b=263,l=15:b4,d#,b4,d#,b4,d#,b4,d#,8p ,8c,8d4,8d#,8a3,4p,8a4,8d#,8d4,4c,b4,d#,b4,d#,b4,d#,b4,d#,b4,d #,b4,d#,b4,d#,b4,d#,1p.,1p.,4p.,b4,d#,b4,d#,b4,d#,b4,d#,8p,8c,8d 4,8d#,8a3,4p,8a4,8d#,8d4,4c,b4,d#,b4,d#,b4,d#,b4,d#,b4,d#,b4,d# ,b4,d#,b4,d#,1p.,1p.
+Scale:d=32,o=5,b=160:c,d,e,f,g,a,b,c6,b,a,g,f,e,d,c
+Tones:d=8,o=5,b=500:b,16p,b,2p,g,16p,g,2p,d6,16p,d6,2p,d,16p,d.
+Trim Phone:d=16,o=5,b=350:a,b,a,b,a,b,a,4p,a,b,a,b,a,b,a,b,a.
+Trio:d=32,o=6,b=320,l=15:d#,a#5,d#,a#5,d#,a#5,d#,a#5,d#,a#5,d#,p,g,d#,g,d#,g,d#,g,d#,g,d#,g,p,a#,g,a#,g,a#,g,a#,g,a#,g,a#,p,1p,1p,1p,4p.,d#,a#5,d#,a#5,d#,a#5,d#,a#5,d#,a#5,d#,p,g,d#,g,d#,g,d#,g,d#,g,d#,g,p,a#,g,a#,g,a#,g,a#,g,a#,g,a#
+Urgent:d=8,o=6,b=500:c,e,d7,c,e,a#,c,e,a,c,e,g,c,e,a,c,e,a#,c,e,d7
+Wolf Whistle:d=16,o=5,b=900:8a4,a#4,b4,c,c#,d,d#,e,f,f#,g,g#,a,a#,b,c6,8c#6,d6,d#6,e6,f6,4p,4p,a4,a#4,b4,c,c#,d,d#,e,f,f#,g,g#,a,a#,b,a#,a,g#,g,f#,f,e,d#,d,c#,c,b4,a#4,a4
