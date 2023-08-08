@@ -60,6 +60,9 @@ static const uint8_t LED1_PIN = 16;
 static const uint8_t DOORBELL_PIN = D5;
 static const uint8_t BUZZER_PIN = D1;
 
+#define ERROR_MESSAGE_PREFIX "*** --> "
+#define MAX_PUBLISH_RETRY 5
+
 WiFiClient wifi_client;
 SoftTimer publish_timer; //millisecond timer
 SoftTimer melody_disabled_timer; //millisecond timer
@@ -83,42 +86,45 @@ Button doorbell_button(DOORBELL_PIN);
 SMART_BELL_SENSOR doorbell;
 
 SMART_MELODY_SELECTOR melody_selector;
+HaMqttEntity identify_button;
+size_t identify_melody_index = 0;
 
 HaMqttEntity * entities[] = {
   &led0.entity,
   &led1.entity,
   &doorbell.entity,
   &melody_selector.entity,
+  &identify_button,
 };
 size_t entities_count = sizeof(entities)/sizeof(entities[0]);
 
 static const char* melodies_array[] PROGMEM = {
   "None:d=4,o=5,b=900:32p",
-  "Beethoven Fifth Symphony:d=4,o=5,b=125:8p,8g5,8g5,8g5,2d#5",
-  "Coca Cola:d=4,o=5,b=125:8f#6,8f#6,8f#6,8f#6,g6,8f#6,e6,8e6,8a6,f#6,d6",
-  "Duke Nukem (short):d=4,o=5,b=90:16f#4,16a4,16p,16b4,8p,16f#4,16b4,16p,16c#,8p",
-  "Entertaine (short):d=4,o=5,b=140:8d,8d#,8e,c6,8e,c6,8e,2c.6,8c6,8d6,8d#6,8e6,8c6,8d6,e6,8b,d6,2c6",
-  "Flintstones (short):d=4,o=5,b=200:g#,c#,8p,c#6,8a#,g#,c#,8p,g#,8f#,8f,8f,8f#,8g#,c#,d#,2f",
-  "Intel:d=16,o=5,b=320:d,p,d,p,d,p,g,p,g,p,g,p,d,p,d,p,d,p,a,p,a,p,a,2p,d,p,d,p,d,p,g,p,g,p,g,p,d,p,d,p,d,p,a,p,a,p,a,2p",
-  "Mission Impossible - Intro:d=16,o=6,b=95:32d,32d#,32d,32d#,32d,32d#,32d,32d#,32d,32d,32d#,32e,32f,32f#,32g,g",
-  "Mission Impossible (short):d=16,o=6,b=95:a#,g,2d,32p,a#,g,2c#,32p,a#,g,2c,a#5,8c,2p,32p,a#5,g5,2f#,32p,a#5,g5,2f,32p,a#5,g5,2e,d#,8d"
-  "Mosaic-long:d=8,o=6,b=400:c,e,g,e,c,g,e,g,c,g,c,e,c,g,e,g,e,c,p,c5,e5,g5,e5,c5,g5,e5,g5,c5,g5,c5,e5,c5,g5,e5,g5,e5,c5",
-  "Nokia:d=4,o=4,b=180:8e5,8d5,f#,g#,8c#5,8b,d,e,8b,8a,c#,e,2a",
-  "Pacman:d=4,o=5,b=112:32b,32p,32b6,32p,32f#6,32p,32d#6,32p,32b6,32f#6,16p,16d#6,16p,32c6,32p,32c7,32p,32g6,32p,32e6,32p,32c7,32g6,16p,16e6,16p,32b,32p,32b6,32p,32f#6,32p,32d#6,32p,32b6,32f#6,16p,16d#6,16p,32d#6,32e6,32f6,32p,32f6,32f#6,32g6,32p,32g6,32g#6,32a6,32p,32b.6",
-  "Popeye (short):d=8,o=6,b=160:a5,c,c,c,4a#5,a5,4c",
-  "Star Wars - Cantina (short):d=4,o=5,b=250:8a,8p,8d6,8p,8a,8p,8d6,8p,8a,8d6,8p,8a,8p,8g#,a,8a,8g#,8a,g,8f#,8g,8f#,f.,8d.,16p",
-  "Star Wars - Imperial March (short):d=4,o=5,b=100:e,e,e,8c,16p,16g,e,8c,16p,16g,e",
-  "Star Wars (short):d=4,o=5,b=45:32p,32f#,32f#,32f#,8b.,8f#.6,32e6,32d#6,32c#6,8b.6,16f#.6,32e6,32d#6,32c#6,8b.6,16f#.6,32e6,32d#6,32e6,8c#.6",
-  "Super Mario Bros. 1 (short):d=4,o=5,b=100:16e6,16e6,32p,8e6,16c6,8e6,8g6,8p,8g",
-  "Super Mario Bros. 3 Level 1 (short):d=4,o=5,b=80:16g,32c,16g.,16a,32c,16a.,16b,32c,16b,16a.,32g#,16a.,16g,32c,16g.,16a,32c,16a,4b.",
-  "Super Mario Bros. Death:d=4,o=5,b=90:32c6,32c6,32c6,8p,16b,16f6,16p,16f6,16f.6,16e.6,16d6,16c6,16p,16e,16p,16c",
-  "Sweet Child:d=8,o=5,b=140:d,d6,a,g,g6,a,f#6,a,d,d6,a,g,g6,a,8f#6",
-  "The Good the Bad and the Ugly (short):d=4,o=5,b=56:32p,32a#,32d#6,32a#,32d#6,8a#.,16f#.,16g#.,d#",
-  "The Itchy Scratchy Show:d=4,o=5,b=160:8c6,8a,p,8c6,8a6,p,8c6,8a,8c6,8a,8c6,8a6,p,8p,8c6,8d6,8e6,8p,8e6,8f6,8g6,p,8d6,8c6,d6,8f6,a#6,a6,2c7",
-  "Tones:d=8,o=5,b=500:b,16p,b,2p,g,16p,g,2p,d6,16p,d6,2p,d,16p,d.,1p,b,16p,b,2p,g,16p,g,2p,d6,16p,d6,2p,d,16p,d.",
-  "Trio:d=32,o=6,b=320,l=15:d#,a#5,d#,a#5,d#,a#5,d#,a#5,d#,a#5,d#,p,g,d#,g,d#,g,d#,g,d#,g,d#,g,p,a#,g,a#,g,a#,g,a#,g,a#,g,a#,p,1p,1p,1p,4p.,d#,a#5,d#,a#5,d#,a#5,d#,a#5,d#,a#5,d#,p,g,d#,g,d#,g,d#,g,d#,g,d#,g,p,a#,g,a#,g,a#,g,a#,g,a#,g,a#",
-  "Wolf Whistle:d=16,o=5,b=900:8a4,a#4,b4,c,c#,d,d#,e,f,f#,g,g#,a,a#,b,c6,8c#6,d6,d#6,e6,f6,4p,4p,a4,a#4,b4,c,c#,d,d#,e,f,f#,g,g#,a,a#,b,a#,a,g#,g,f#,f,e,d#,d,c#,c,b4,a#4,a4",
-  "X-Files (short):d=4,o=5,b=125:e,b,a,b,d6,2b.,8p,e,b,a,b,d6,2b.",
+  "Beethoven Fifth Symphony:d=4,o=5,b=125:8p,8g5,8g5,8g5,2d#5",
+  "Coca Cola:d=4,o=5,b=125:8f#6,8f#6,8f#6,8f#6,g6,8f#6,e6,8e6,8a6,f#6,d6",
+  "Duke Nukem (short):d=4,o=5,b=90:16f#4,16a4,16p,16b4,8p,16f#4,16b4,16p,16c#,8p",
+  "Entertaine (short):d=4,o=5,b=140:8d,8d#,8e,c6,8e,c6,8e,2c.6,8c6,8d6,8d#6,8e6,8c6,8d6,e6,8b,d6,2c6",
+  "Flintstones (short):d=4,o=5,b=200:g#,c#,8p,c#6,8a#,g#,c#,8p,g#,8f#,8f,8f,8f#,8g#,c#,d#,2f",
+  "Intel:d=16,o=5,b=320:d,p,d,p,d,p,g,p,g,p,g,p,d,p,d,p,d,p,a,p,a,p,a,2p,d,p,d,p,d,p,g,p,g,p,g,p,d,p,d,p,d,p,a,p,a,p,a,2p",
+  "Mission Impossible - Intro:d=16,o=6,b=95:32d,32d#,32d,32d#,32d,32d#,32d,32d#,32d,32d,32d#,32e,32f,32f#,32g,g",
+  "Mission Impossible (short):d=16,o=6,b=95:a#,g,2d,32p,a#,g,2c#,32p,a#,g,2c,a#5,8c,2p,32p,a#5,g5,2f#,32p,a#5,g5,2f,32p,a#5,g5,2e,d#,8d",
+  "Mosaic-long:d=8,o=6,b=400:c,e,g,e,c,g,e,g,c,g,c,e,c,g,e,g,e,c,p,c5,e5,g5,e5,c5,g5,e5,g5,c5,g5,c5,e5,c5,g5,e5,g5,e5,c5",
+  "Nokia:d=4,o=4,b=180:8e5,8d5,f#,g#,8c#5,8b,d,e,8b,8a,c#,e,2a",
+  "Pacman:d=4,o=5,b=112:32b,32p,32b6,32p,32f#6,32p,32d#6,32p,32b6,32f#6,16p,16d#6,16p,32c6,32p,32c7,32p,32g6,32p,32e6,32p,32c7,32g6,16p,16e6,16p,32b,32p,32b6,32p,32f#6,32p,32d#6,32p,32b6,32f#6,16p,16d#6,16p,32d#6,32e6,32f6,32p,32f6,32f#6,32g6,32p,32g6,32g#6,32a6,32p,32b.6",
+  "Popeye (short):d=8,o=6,b=160:a5,c,c,c,4a#5,a5,4c",
+  "Star Wars - Cantina (short):d=4,o=5,b=250:8a,8p,8d6,8p,8a,8p,8d6,8p,8a,8d6,8p,8a,8p,8g#,a,8a,8g#,8a,g,8f#,8g,8f#,f.,8d.,16p",
+  "Star Wars - Imperial March (short):d=4,o=5,b=100:e,e,e,8c,16p,16g,e,8c,16p,16g,e",
+  "Star Wars (short):d=4,o=5,b=45:32p,32f#,32f#,32f#,8b.,8f#.6,32e6,32d#6,32c#6,8b.6,16f#.6,32e6,32d#6,32c#6,8b.6,16f#.6,32e6,32d#6,32e6,8c#.6",
+  "Super Mario Bros. 1 (short):d=4,o=5,b=100:16e6,16e6,32p,8e6,16c6,8e6,8g6,8p,8g",
+  "Super Mario Bros. 3 Level 1 (short):d=4,o=5,b=80:16g,32c,16g.,16a,32c,16a.,16b,32c,16b,16a.,32g#,16a.,16g,32c,16g.,16a,32c,16a,4b.",
+  "Super Mario Bros. Death:d=4,o=5,b=90:32c6,32c6,32c6,8p,16b,16f6,16p,16f6,16f.6,16e.6,16d6,16c6,16p,16e,16p,16c",
+  "Sweet Child:d=8,o=5,b=140:d,d6,a,g,g6,a,f#6,a,d,d6,a,g,g6,a,8f#6",
+  "The Good the Bad and the Ugly (short):d=4,o=5,b=56:32p,32a#,32d#6,32a#,32d#6,8a#.,16f#.,16g#.,d#",
+  "The Itchy Scratchy Show:d=4,o=5,b=160:8c6,8a,p,8c6,8a6,p,8c6,8a,8c6,8a,8c6,8a6,p,8p,8c6,8d6,8e6,8p,8e6,8f6,8g6,p,8d6,8c6,d6,8f6,a#6,a6,2c7",
+  "Tones:d=8,o=5,b=500:b,16p,b,2p,g,16p,g,2p,d6,16p,d6,2p,d,16p,d.,1p,b,16p,b,2p,g,16p,g,2p,d6,16p,d6,2p,d,16p,d.",
+  "Trio:d=32,o=6,b=320:d#,a#5,d#,a#5,d#,a#5,d#,a#5,d#,a#5,d#,p,g,d#,g,d#,g,d#,g,d#,g,d#,g,p,a#,g,a#,g,a#,g,a#,g,a#,g,a#,1p,1p,d#,a#5,d#,a#5,d#,a#5,d#,a#5,d#,a#5,d#,p,g,d#,g,d#,g,d#,g,d#,g,d#,g,p,a#,g,a#,g,a#,g,a#,g,a#,g,a#",
+  "Wolf Whistle:d=16,o=5,b=900:8a4,a#4,b4,c,c#,d,d#,e,f,f#,g,g#,a,a#,b,c6,8c#6,d6,d#6,e6,f6,4p,4p,a4,a#4,b4,c,c#,d,d#,e,f,f#,g,g#,a,a#,b,a#,a,g#,g,f#,f,e,d#,d,c#,c,b4,a#4,a4",
+  "X-Files (short):d=4,o=5,b=125:e,b,a,b,d6,2b.,8p,e,b,a,b,d6,2b.",
 };
 static const size_t melodies_array_count = sizeof(melodies_array) / sizeof(melodies_array[0]);
 static const char* melody_names[melodies_array_count] = {0};
@@ -146,6 +152,7 @@ size_t find_melody_by_name(const String & name);
 size_t find_melody_by_name(const uint8_t * buffer, size_t length);
 void extract_melody_name(const __FlashStringHelper* str, String & name);
 void extract_melody_name(size_t index, String & name);
+void increase_mqtt_buffer(uint16_t new_buffer_size = 0);
 
 //************************************************************
 //   Function definitions
@@ -198,6 +205,7 @@ void setup_melody_names() {
     // Find the name of this rtttl melody
     String name;
     extract_melody_name(i, name);
+
     Serial.print("Found melody ");
     Serial.print(String(i));
     Serial.print(": ");
@@ -205,6 +213,11 @@ void setup_melody_names() {
 
     melody_names[i] = strdup(name.c_str());
   }
+
+  // Find our IDENTIFY RTTL melody by name
+  identify_melody_index = find_melody_by_name("Trio");
+  if (identify_melody_index == INVALID_MELODY_INDEX)
+    identify_melody_index = 1;
 }
 
 void setup_wifi() {
@@ -282,6 +295,14 @@ void setup_device() {
   melody_selector.entity.setDevice(&this_device); // this also adds the entity to the device and generates a unique_id based on the first identifier of the device.
   melody_selector.entity.setMqttAdaptor(&publish_adaptor);
 
+  // Configure identify_button entity attributes
+  identify_button.setIntegrationType(HA_MQTT_BUTTON);
+  identify_button.setName("Identify");
+  identify_button.addKeyValue("device_class","identify");
+  identify_button.setCommandTopic(device_identifier + "/identify/set");
+  identify_button.setStateTopic(  device_identifier + "/identify/set");
+  identify_button.setDevice(&this_device); // this also adds the entity to the device and generates a unique_id based on the first identifier of the device.
+  identify_button.setMqttAdaptor(&publish_adaptor);
 }
 
 void setup_led(size_t led_index) {
@@ -307,13 +328,7 @@ void setup_mqtt() {
   mqtt_client.setKeepAlive(30);
   
   // Changing default buffer size. If buffer is too small, publishing and notifications are discarded.
-  uint16_t default_buffer_size = mqtt_client.getBufferSize();
-  Serial.print("PubSubClient.buffer_size: ");
-  Serial.println(default_buffer_size);
-
-  mqtt_client.setBufferSize(4*default_buffer_size);
-  Serial.print("PubSubClient.buffer_size set to ");
-  Serial.println(mqtt_client.getBufferSize());
+  increase_mqtt_buffer(2048);
 }
 
 bool is_printable(const byte* payload, unsigned int length) {
@@ -419,7 +434,23 @@ void mqtt_subscription_callback(const char* topic, const byte* payload, unsigned
     }
   }
 
-  Serial.print("MQTT error: unknown topic: ");
+  // is this a IDENTIFY_BUTTON command topic ?
+  if (identify_button.getCommandTopic() == topic) {
+    // Interrupt what ever we are playing.
+    if (anyrtttl::nonblocking::isPlaying())
+      anyrtttl::nonblocking::stop();
+
+    // Play the identify RTTTL melody.
+    const char * selected_melody_buffer = melodies_array[identify_melody_index];
+    anyrtttl::nonblocking::begin_P(BUZZER_PIN, selected_melody_buffer);
+
+    Serial.print("Playing: ");
+    Serial.println(melody_names[identify_melody_index]);
+
+    return; // this topic is handled
+  }
+
+  Serial.print(String(ERROR_MESSAGE_PREFIX) + "MQTT error: unknown topic: ");
   Serial.println(topic);
 }
 
@@ -462,6 +493,8 @@ void mqtt_reconnect() {
     // Do initialization stuff when we first connect.
     if (mqtt_client.connected()) {
       
+      bool success = false;
+
       // Set device as "offline" while we update all entity states.
       // This will "disable" all entities in Home Assistant while we update.
       this_device.publishMqttDeviceStatus(false);
@@ -471,11 +504,25 @@ void mqtt_reconnect() {
         HaMqttEntity & entity = *(entities[i]);
 
         // Publish Home Assistant mqtt discovery topic
-        entity.publishMqttDiscovery();
+        success = false;
+        for(size_t i=0; i<MAX_PUBLISH_RETRY && !success; i++) {
+          success = entity.publishMqttDiscovery();
+          if (!success) {
+            // try to increase the mqtt buffer size and try again.
+            increase_mqtt_buffer();
+          }
+        }
 
         // Publish entity's state to initialize Home Assistant UI
         entity.getState().setDirty();
-        entity.publishMqttState();
+        success = false;
+        for(size_t i=0; i<MAX_PUBLISH_RETRY && !success; i++) {
+          success = entity.publishMqttState();
+          if (!success) {
+            // try to increase the mqtt buffer size and try again.
+            increase_mqtt_buffer();
+          }
+        }
 
         // Subscribe to receive entity state change notifications
         entity.subscribe();
@@ -562,6 +609,32 @@ void extract_melody_name(size_t index, String & name) {
   extract_melody_name((const __FlashStringHelper*)melody, name);
 }
 
+void increase_mqtt_buffer(uint16_t new_buffer_size) {
+  uint16_t current_buffer_size = mqtt_client.getBufferSize();
+
+  // If no size is requested, double the previous buffer size
+  if (new_buffer_size == 0) {
+    new_buffer_size = 2*current_buffer_size;
+    
+    // Check for overflows
+    if (new_buffer_size < current_buffer_size)
+      new_buffer_size = (uint16_t)-1; // set to maximum
+  }
+
+  bool success = mqtt_client.setBufferSize(new_buffer_size);
+  if (success) {
+    Serial.print("PubSubClient buffer_size increased from ")
+    Serial.print(current_buffer_size);
+    Serial.print(" bytes to ");
+    Serial.println(mqtt_client.getBufferSize());
+    Serial.print(" bytes.");
+  } else {
+    Serial.print(String(ERROR_MESSAGE_PREFIX) + "Failed increasing PubSubClient buffer_size to ");
+    Serial.print(new_buffer_size);
+    Serial.print(" bytes. PubSubClient buffer_size set to ");
+    Serial.println(mqtt_client.getBufferSize());
+  }
+}
 
 void setup() {
   pinMode(LED0_PIN, OUTPUT);
@@ -576,6 +649,9 @@ void setup() {
   publish_adaptor.setPubSubClient(&mqtt_client);
 
   Serial.begin(115200);
+  Serial.println("READY!");
+
+  HaMqttDiscovery::error_message_prefix = ERROR_MESSAGE_PREFIX;  
   
   // Force turn OFF all leds.
   for(size_t i=0; i<leds_count; i++) {
@@ -589,11 +665,16 @@ void setup() {
   doorbell.state.is_pressed = false;
   doorbell.entity.setState("OFF");
 
+  identify_button.getState().setDirty();  // This will publish an empty payload to the command/state topic (both are identical). This will 'delete' the command topic until the button is pressed again.
+
+  setup_melody_names();
+
   melody_selector.state.selected_melody = 0;
-  melody_selector.entity.setState(melody_names[melody_selector.state.selected_melody]);
+  const char * default_selected_melody_name = melody_names[melody_selector.state.selected_melody];
+  Serial.print(String() + "Set default melody selector state to '" + default_selected_melody_name + "'.");
+  melody_selector.entity.setState(default_selected_melody_name);
 
   setup_wifi();
-  setup_melody_names();
   setup_device();
   setup_mqtt();
 
@@ -623,12 +704,15 @@ void loop() {
 
   // Should we start a melody?
   if (doorbell.entity.getState().isDirty() &&
+      doorbell.state.is_pressed && // do not trigger a melody when button is released 
       melody_selector.state.selected_melody < melodies_array_count &&
       melody_disabled_timer.hasTimedOut() &&
       !anyrtttl::nonblocking::isPlaying())
   {
-    const char * selected_melodies_array = melodies_array[melody_selector.state.selected_melody];
-    anyrtttl::nonblocking::begin_P(BUZZER_PIN, selected_melodies_array);
+    const char * selected_melody_buffer = melodies_array[melody_selector.state.selected_melody];
+    Serial.print("Playing: ");
+    Serial.println(melody_names[melody_selector.state.selected_melody]);
+    anyrtttl::nonblocking::begin_P(BUZZER_PIN, selected_melody_buffer);
 
     // Update our timer
     melody_disabled_timer.reset();  //start counting now
@@ -644,7 +728,16 @@ void loop() {
   for(size_t i=0; i<entities_count; i++) {
     HaMqttEntity & entity = *(entities[i]);
     if (entity.getState().isDirty()) {
-      entity.publishMqttState();
+
+      bool success = false;
+      for(size_t i=0; i<MAX_PUBLISH_RETRY && !success; i++) {
+        success = entity.publishMqttState();
+        if (!success) {
+          // try to increase the mqtt buffer size and try again.
+          increase_mqtt_buffer();
+        }
+      }
+
     }
   }
 }
