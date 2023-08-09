@@ -86,7 +86,7 @@ Button doorbell_button(DOORBELL_PIN);
 SMART_BELL_SENSOR doorbell;
 
 SMART_MELODY_SELECTOR melody_selector;
-HaMqttEntity identify_button;
+HaMqttEntity test_button;
 size_t identify_melody_index = 0;
 
 HaMqttEntity * entities[] = {
@@ -94,7 +94,7 @@ HaMqttEntity * entities[] = {
   &led1.entity,
   &doorbell.entity,
   &melody_selector.entity,
-  &identify_button,
+  &test_button,
 };
 size_t entities_count = sizeof(entities)/sizeof(entities[0]);
 
@@ -295,14 +295,13 @@ void setup_device() {
   melody_selector.entity.setDevice(&this_device); // this also adds the entity to the device and generates a unique_id based on the first identifier of the device.
   melody_selector.entity.setMqttAdaptor(&publish_adaptor);
 
-  // Configure identify_button entity attributes
-  identify_button.setIntegrationType(HA_MQTT_BUTTON);
-  identify_button.setName("Identify");
-  identify_button.addKeyValue("device_class","identify");
-  identify_button.setCommandTopic(device_identifier + "/identify/set");
-  identify_button.setStateTopic(  device_identifier + "/identify/set");
-  identify_button.setDevice(&this_device); // this also adds the entity to the device and generates a unique_id based on the first identifier of the device.
-  identify_button.setMqttAdaptor(&publish_adaptor);
+  // Configure test_button entity attributes
+  test_button.setIntegrationType(HA_MQTT_BUTTON);
+  test_button.setName("Test");
+  test_button.setCommandTopic(device_identifier + "/test/set");
+  test_button.setStateTopic(  device_identifier + "/test/set");
+  test_button.setDevice(&this_device); // this also adds the entity to the device and generates a unique_id based on the first identifier of the device.
+  test_button.setMqttAdaptor(&publish_adaptor);
 }
 
 void setup_led(size_t led_index) {
@@ -434,18 +433,26 @@ void mqtt_subscription_callback(const char* topic, const byte* payload, unsigned
     }
   }
 
-  // is this a IDENTIFY_BUTTON command topic ?
-  if (identify_button.getCommandTopic() == topic) {
+  // is this a TEST_BUTTON command topic ?
+  if (test_button.getCommandTopic() == topic) {
     // Interrupt what ever we are playing.
     if (anyrtttl::nonblocking::isPlaying())
       anyrtttl::nonblocking::stop();
 
+    // If none is selected, we need to pick a random melody to play
+    size_t melody_index = melody_selector.state.selected_melody;
+    if (melody_index == 0) {
+      while(melody_index == 0 || melody_index >= melodies_array_count) {
+        melody_index = (size_t)random(1, melodies_array_count);
+      }
+    }
+
     // Play the identify RTTTL melody.
-    const char * selected_melody_buffer = melodies_array[identify_melody_index];
-    anyrtttl::nonblocking::begin_P(BUZZER_PIN, selected_melody_buffer);
+    const char * melody_buffer = melodies_array[melody_index];
+    anyrtttl::nonblocking::begin_P(BUZZER_PIN, melody_buffer);
 
     Serial.print("Playing: ");
-    Serial.println(melody_names[identify_melody_index]);
+    Serial.println(melody_names[melody_index]);
 
     return; // this topic is handled
   }
@@ -623,11 +630,11 @@ void increase_mqtt_buffer(uint16_t new_buffer_size) {
 
   bool success = mqtt_client.setBufferSize(new_buffer_size);
   if (success) {
-    Serial.print("PubSubClient buffer_size increased from ")
+    Serial.print("PubSubClient buffer_size increased from ");
     Serial.print(current_buffer_size);
     Serial.print(" bytes to ");
-    Serial.println(mqtt_client.getBufferSize());
-    Serial.print(" bytes.");
+    Serial.print(mqtt_client.getBufferSize());
+    Serial.println(" bytes.");
   } else {
     Serial.print(String(ERROR_MESSAGE_PREFIX) + "Failed increasing PubSubClient buffer_size to ");
     Serial.print(new_buffer_size);
@@ -665,7 +672,9 @@ void setup() {
   doorbell.state.is_pressed = false;
   doorbell.entity.setState("OFF");
 
-  identify_button.getState().setDirty();  // This will publish an empty payload to the command/state topic (both are identical). This will 'delete' the command topic until the button is pressed again.
+  // Set entity's state to publish an empty payload to the command/state topic (both are identical).
+  // This will 'delete' the command topic until the button is pressed again.
+  test_button.getState().setDirty();
 
   setup_melody_names();
 
