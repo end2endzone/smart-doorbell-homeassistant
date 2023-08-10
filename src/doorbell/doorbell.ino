@@ -30,7 +30,7 @@ struct SMART_LED {
 };
 
 struct BELL_SENSOR_STATE {
-  bool is_pressed;
+  bool detected;
 };
 struct SMART_BELL_SENSOR {
   HaMqttEntity entity;
@@ -53,6 +53,15 @@ struct SMART_SWITCH {
   SWITCH_STATE state;
 };
 
+struct BUTTON_STATE {
+  size_t is_pressed;
+};
+struct SMART_BUTTON {
+  HaMqttEntity entity;
+  BUTTON_STATE state;
+  BUTTON_STATE previous;
+};
+
 //************************************************************
 //   Variables
 //************************************************************
@@ -72,7 +81,7 @@ static const uint8_t BUZZER_PIN = D1;
 #define MAX_PUBLISH_RETRY 5
 
 WiFiClient wifi_client;
-SoftTimer publish_timer; //millisecond timer
+SoftTimer test_timer; //millisecond timer
 SoftTimer doorbell_ringer_timer; //millisecond timer, to delay between each doorbell ring
 SoftTimer identify_delay_timer; //millisecond timer, to delay between each play of the identify RTTTL melody.
 
@@ -91,12 +100,12 @@ SMART_LED led1;
 SMART_LED * leds[] = {&led0, &led1};
 size_t leds_count = sizeof(leds)/sizeof(leds[0]);
 
-Button doorbell_button(DOORBELL_PIN);
-SMART_BELL_SENSOR doorbell;
+Button bell_sensor_reader(DOORBELL_PIN);
+SMART_BELL_SENSOR bell_sensor;
 
 SMART_MELODY_SELECTOR melody_selector;
 
-HaMqttEntity test_button;
+SMART_BUTTON test_button;
 
 SMART_SWITCH identify;
 size_t identify_melody_index = 0;
@@ -104,9 +113,9 @@ size_t identify_melody_index = 0;
 HaMqttEntity * entities[] = {
   &led0.entity,
   &led1.entity,
-  &doorbell.entity,
+  &bell_sensor.entity,
   &melody_selector.entity,
-  &test_button,
+  &test_button.entity,
   &identify.entity,
 };
 size_t entities_count = sizeof(entities)/sizeof(entities[0]);
@@ -135,7 +144,7 @@ static const char* melodies_array[] PROGMEM = {
   "The Good the Bad and the Ugly (short):d=4,o=5,b=56:32p,32a#,32d#6,32a#,32d#6,8a#.,16f#.,16g#.,d#",
   "The Itchy Scratchy Show:d=4,o=5,b=160:8c6,8a,p,8c6,8a6,p,8c6,8a,8c6,8a,8c6,8a6,p,8p,8c6,8d6,8e6,8p,8e6,8f6,8g6,p,8d6,8c6,d6,8f6,a#6,a6,2c7",
   "Tones:d=8,o=5,b=500:b,16p,b,2p,g,16p,g,2p,d6,16p,d6,2p,d,16p,d.,1p,b,16p,b,2p,g,16p,g,2p,d6,16p,d6,2p,d,16p,d.",
-  "Trio:d=32,o=6,b=320:d#,a#5,d#,a#5,d#,a#5,d#,a#5,d#,a#5,d#,p,g,d#,g,d#,g,d#,g,d#,g,d#,g,p,a#,g,a#,g,a#,g,a#,g,a#,g,a#,1p,1p,d#,a#5,d#,a#5,d#,a#5,d#,a#5,d#,a#5,d#,p,g,d#,g,d#,g,d#,g,d#,g,d#,g,p,a#,g,a#,g,a#,g,a#,g,a#,g,a#",
+  "Trio:d=32,o=6,b=320:d#,a#5,d#,a#5,d#,a#5,d#,a#5,d#,a#5,d#,p,g,d#,g,d#,g,d#,g,d#,g,d#,g,p,a#,g,a#,g,a#,g,a#,g,a#,g,a#",
   "Wolf Whistle:d=16,o=5,b=900:8a4,a#4,b4,c,c#,d,d#,e,f,f#,g,g#,a,a#,b,c6,8c#6,d6,d#6,e6,f6,4p,4p,a4,a#4,b4,c,c#,d,d#,e,f,f#,g,g#,a,a#,b,a#,a,g#,g,f#,f,e,d#,d,c#,c,b4,a#4,a4",
   "X-Files (short):d=4,o=5,b=125:e,b,a,b,d6,2b.,8p,e,b,a,b,d6,2b.",
 };
@@ -167,6 +176,7 @@ size_t find_melody_by_name(const uint8_t * buffer, size_t length);
 void extract_melody_name(const __FlashStringHelper* str, String & name);
 void extract_melody_name(size_t index, String & name);
 void increase_mqtt_buffer(uint16_t new_buffer_size = 0);
+void timer_force_timed_out(SoftTimer & timer);
 
 //************************************************************
 //   Function definitions
@@ -285,7 +295,7 @@ void setup_device() {
   this_device.setName("Smart doorbell");
   this_device.setManufacturer("end2endzone");
   this_device.setModel("ESP8266");
-  this_device.setHardwareVersion("2.2");
+  this_device.setHardwareVersion("1.0");
   this_device.setSoftwareVersion("0.1");
   this_device.setMqttAdaptor(&publish_adaptor);
 
@@ -293,12 +303,12 @@ void setup_device() {
   setup_led(1);
 
   // Configure DOORBELL entity attributes
-  doorbell.entity.setIntegrationType(HA_MQTT_BINARY_SENSOR);
-  doorbell.entity.setName("BELL");
-  doorbell.entity.setStateTopic(device_identifier + "/doorbell/state");
-  doorbell.entity.addKeyValue("device_class","sound");
-  doorbell.entity.setDevice(&this_device); // this also adds the entity to the device and generates a unique_id based on the first identifier of the device.
-  doorbell.entity.setMqttAdaptor(&publish_adaptor);
+  bell_sensor.entity.setIntegrationType(HA_MQTT_BINARY_SENSOR);
+  bell_sensor.entity.setName("Bell");
+  bell_sensor.entity.setStateTopic(device_identifier + "/doorbell/state");
+  bell_sensor.entity.addKeyValue("device_class","sound");
+  bell_sensor.entity.setDevice(&this_device); // this also adds the entity to the device and generates a unique_id based on the first identifier of the device.
+  bell_sensor.entity.setMqttAdaptor(&publish_adaptor);
 
   // Configure MELODY_SELECTOR entity attributes
   melody_selector.entity.setIntegrationType(HA_MQTT_SELECT);
@@ -310,12 +320,12 @@ void setup_device() {
   melody_selector.entity.setMqttAdaptor(&publish_adaptor);
 
   // Configure test_button entity attributes
-  test_button.setIntegrationType(HA_MQTT_BUTTON);
-  test_button.setName("Test");
-  test_button.setCommandTopic(device_identifier + "/test/set");
-  test_button.setStateTopic(  device_identifier + "/test/set");
-  test_button.setDevice(&this_device); // this also adds the entity to the device and generates a unique_id based on the first identifier of the device.
-  test_button.setMqttAdaptor(&publish_adaptor);
+  test_button.entity.setIntegrationType(HA_MQTT_BUTTON);
+  test_button.entity.setName("Test");
+  test_button.entity.setCommandTopic(device_identifier + "/test/set");
+  test_button.entity.setStateTopic(  device_identifier + "/test/set");
+  test_button.entity.setDevice(&this_device); // this also adds the entity to the device and generates a unique_id based on the first identifier of the device.
+  test_button.entity.setMqttAdaptor(&publish_adaptor);
 
   // Configure identify switch entity attributes
   identify.entity.setIntegrationType(HA_MQTT_SWITCH);
@@ -443,7 +453,7 @@ void mqtt_subscription_callback(const char* topic, const byte* payload, unsigned
     }
   }
 
-  // is this a MELODY SELECTOR command topic ?
+  // is this a MELODY selector command topic ?
   if (melody_selector.entity.getCommandTopic() == topic) {
     if (printable) {
       size_t melody_name_index = find_melody_by_name(payload, length);
@@ -456,31 +466,20 @@ void mqtt_subscription_callback(const char* topic, const byte* payload, unsigned
     }
   }
 
-  // is this a TEST BUTTON command topic ?
-  if (test_button.getCommandTopic() == topic) {
+  // is this a TEST button command topic ?
+  if (test_button.entity.getCommandTopic() == topic) {
     // Interrupt what ever we are playing.
     if (anyrtttl::nonblocking::isPlaying())
       anyrtttl::nonblocking::stop();
 
-    // If none is selected, we need to pick a random melody to play
-    size_t melody_index = melody_selector.state.selected_melody;
-    if (melody_index == 0) {
-      while(melody_index == 0 || melody_index >= melodies_array_count) {
-        melody_index = (size_t)random(1, melodies_array_count);
-      }
-    }
-
-    // Play the test RTTTL melody.
-    const char * melody_buffer = melodies_array[melody_index];
-    anyrtttl::nonblocking::begin_P(BUZZER_PIN, melody_buffer);
-
-    Serial.print("Playing: ");
-    Serial.println(melody_names[melody_index]);
+    // Apply command
+    test_button.state.is_pressed = true;
+    test_timer.reset(); // start test timer, when the timer expires, the state will change to false
 
     return; // this topic is handled
   }
 
-  // is this a IDENTIFY SWITCH command topic ?
+  // is this the IDENTIFY switch command topic ?
   if (identify.entity.getCommandTopic() == topic) {
     // Interrupt what ever we are playing.
     if (anyrtttl::nonblocking::isPlaying())
@@ -690,12 +689,20 @@ void increase_mqtt_buffer(uint16_t new_buffer_size) {
   }
 }
 
+void timer_force_timed_out(SoftTimer & timer) {
+  unsigned long current_time_out_time = timer.getTimeOutTime();
+  timer.setTimeOutTime(1);
+  timer.reset();
+  delay(2);
+  timer.setTimeOutTime(current_time_out_time);
+}
+
 void setup() {
   pinMode(LED0_PIN, OUTPUT);
   pinMode(LED1_PIN, OUTPUT);
   pinMode(BUZZER_PIN, OUTPUT);
 
-  doorbell_button.begin();
+  bell_sensor_reader.begin();
 
   led0.pin = LED0_PIN;
   led1.pin = LED1_PIN;
@@ -716,14 +723,16 @@ void setup() {
   }
 
   // Set default values for other entities
-  doorbell.state.is_pressed = false;
-  doorbell.entity.setState("OFF");
+  bell_sensor.state.detected = false;
+  bell_sensor.entity.setState("OFF");
 
   identify.state.is_on = false;
+  identify.entity.setState("OFF");
 
   // Set entity's state to publish an empty payload to the command/state topic (both are identical).
   // This will 'delete' the command topic until the button is pressed again.
-  test_button.getState().setDirty();
+  test_button.state.is_pressed = false;
+  test_button.entity.getState().setDirty();
 
   setup_melody_names();
 
@@ -737,14 +746,16 @@ void setup() {
   setup_mqtt();
 
   // setup a timer to prevent starting a new melody
-  doorbell_ringer_timer.setTimeOutTime(1);
-  doorbell_ringer_timer.reset();  //start counting now
-  delay(10); // set our timer to be in "timed out" state.
+  timer_force_timed_out(doorbell_ringer_timer);
   doorbell_ringer_timer.setTimeOutTime(2500);
 
   // setup a timer to prevent playing the identify melody as soon as it ends.
   identify_delay_timer.setTimeOutTime(2500);
   identify_delay_timer.reset();
+
+  // setup a timer to compute how long do we force the bell sensor to be ON.
+  timer_force_timed_out(test_timer);
+  test_timer.setTimeOutTime(200);
 }
 
 void loop() {
@@ -755,18 +766,36 @@ void loop() {
   mqtt_client.loop();
 
   // Read DOORBELL pin
-  if (doorbell_button.toggled()) {
-    if (doorbell_button.read() == Button::PRESSED) {
-      doorbell.state.is_pressed = true;
+  if (bell_sensor_reader.toggled()) {
+    if (bell_sensor_reader.read() == Button::PRESSED) {
+      bell_sensor.state.detected = true;
     } else {
-      doorbell.state.is_pressed = false;
+      bell_sensor.state.detected = false;
     }
-    doorbell.entity.setState(doorbell.state.is_pressed ? "ON" : "OFF");
+    bell_sensor.entity.setState(bell_sensor.state.detected ? "ON" : "OFF");
   }
 
+  // Did we pressed the TEST button?
+  if (test_button.previous.is_pressed == false && test_button.state.is_pressed) {
+    // Force the state of the bell sensor to ON
+    bell_sensor.state.detected = true;
+    bell_sensor.entity.setState(bell_sensor.state.detected ? "ON" : "OFF");
+
+    // Start a time to stop overriding the BELL sensor
+    test_timer.reset();
+  }
+  if (test_button.state.is_pressed && test_timer.hasTimedOut()) {
+    // Force the state of the bell sensor to OFF
+    bell_sensor.state.detected = false;
+    bell_sensor.entity.setState(bell_sensor.state.detected ? "ON" : "OFF");
+
+    test_button.state.is_pressed = false;
+  }
+  test_button.previous = test_button.state; // remember previous state
+
   // Should we start a doorbell melody?
-  if (doorbell.entity.getState().isDirty() &&
-      doorbell.state.is_pressed && // do not trigger a melody when button is released 
+  if (bell_sensor.entity.getState().isDirty() &&
+      bell_sensor.state.detected && // do not trigger a melody when button is released 
       melody_selector.state.selected_melody < melodies_array_count &&
       doorbell_ringer_timer.hasTimedOut() &&
       !anyrtttl::nonblocking::isPlaying())
