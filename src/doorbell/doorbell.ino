@@ -45,6 +45,14 @@ struct SMART_MELODY_SELECTOR {
   MELODY_STATE state;
 };
 
+struct SWITCH_STATE {
+  size_t is_on;
+};
+struct SMART_SWITCH {
+  HaMqttEntity entity;
+  SWITCH_STATE state;
+};
+
 //************************************************************
 //   Variables
 //************************************************************
@@ -65,7 +73,8 @@ static const uint8_t BUZZER_PIN = D1;
 
 WiFiClient wifi_client;
 SoftTimer publish_timer; //millisecond timer
-SoftTimer melody_disabled_timer; //millisecond timer
+SoftTimer doorbell_ringer_timer; //millisecond timer, to delay between each doorbell ring
+SoftTimer identify_delay_timer; //millisecond timer, to delay between each play of the identify RTTTL melody.
 
 static const char * device_identifier_prefix = "doorbell";
 String device_identifier; // defined as device_identifier_prefix followed by device mac address without ':' characters.
@@ -86,7 +95,10 @@ Button doorbell_button(DOORBELL_PIN);
 SMART_BELL_SENSOR doorbell;
 
 SMART_MELODY_SELECTOR melody_selector;
+
 HaMqttEntity test_button;
+
+SMART_SWITCH identify;
 size_t identify_melody_index = 0;
 
 HaMqttEntity * entities[] = {
@@ -95,6 +107,7 @@ HaMqttEntity * entities[] = {
   &doorbell.entity,
   &melody_selector.entity,
   &test_button,
+  &identify.entity,
 };
 size_t entities_count = sizeof(entities)/sizeof(entities[0]);
 
@@ -147,6 +160,7 @@ void mqtt_subscription_callback(const char* topic, const byte* payload, unsigned
 void mqtt_reconnect();
 bool parse_boolean(const char * value);
 uint8_t parse_uint8(const char * value);
+String parse_string_without_terminating_null(const uint8_t * buffer, size_t length);
 size_t find_melody_by_name(const char * name);
 size_t find_melody_by_name(const String & name);
 size_t find_melody_by_name(const uint8_t * buffer, size_t length);
@@ -302,6 +316,15 @@ void setup_device() {
   test_button.setStateTopic(  device_identifier + "/test/set");
   test_button.setDevice(&this_device); // this also adds the entity to the device and generates a unique_id based on the first identifier of the device.
   test_button.setMqttAdaptor(&publish_adaptor);
+
+  // Configure identify switch entity attributes
+  identify.entity.setIntegrationType(HA_MQTT_SWITCH);
+  identify.entity.setName("Identify");
+  identify.entity.setCommandTopic(device_identifier + "/identify/set");
+  identify.entity.setStateTopic(device_identifier + "/identify/state");
+  identify.entity.addKeyValue("device_class","switch");
+  identify.entity.setDevice(&this_device); // this also adds the entity to the device and generates a unique_id based on the first identifier of the device.
+  identify.entity.setMqttAdaptor(&publish_adaptor);
 }
 
 void setup_led(size_t led_index) {
@@ -420,7 +443,7 @@ void mqtt_subscription_callback(const char* topic, const byte* payload, unsigned
     }
   }
 
-  // is this a MELODY_SELECTOR command topic ?
+  // is this a MELODY SELECTOR command topic ?
   if (melody_selector.entity.getCommandTopic() == topic) {
     if (printable) {
       size_t melody_name_index = find_melody_by_name(payload, length);
@@ -433,7 +456,7 @@ void mqtt_subscription_callback(const char* topic, const byte* payload, unsigned
     }
   }
 
-  // is this a TEST_BUTTON command topic ?
+  // is this a TEST BUTTON command topic ?
   if (test_button.getCommandTopic() == topic) {
     // Interrupt what ever we are playing.
     if (anyrtttl::nonblocking::isPlaying())
@@ -447,12 +470,31 @@ void mqtt_subscription_callback(const char* topic, const byte* payload, unsigned
       }
     }
 
-    // Play the identify RTTTL melody.
+    // Play the test RTTTL melody.
     const char * melody_buffer = melodies_array[melody_index];
     anyrtttl::nonblocking::begin_P(BUZZER_PIN, melody_buffer);
 
     Serial.print("Playing: ");
     Serial.println(melody_names[melody_index]);
+
+    return; // this topic is handled
+  }
+
+  // is this a IDENTIFY SWITCH command topic ?
+  if (identify.entity.getCommandTopic() == topic) {
+    // Interrupt what ever we are playing.
+    if (anyrtttl::nonblocking::isPlaying())
+      anyrtttl::nonblocking::stop();
+
+    String value = parse_string_without_terminating_null(payload, length);
+
+    // Apply command
+    bool turn_on = parse_boolean(value.c_str());
+    if (turn_on != identify.state.is_on) {
+      // the state has changed
+      identify.state.is_on = turn_on;
+      identify.entity.setState((identify.state.is_on ? "ON" : "OFF"));
+    }
 
     return; // this topic is handled
   }
@@ -569,6 +611,14 @@ uint8_t parse_uint8(const char * value) {
   return numeric_value;
 }
 
+String parse_string_without_terminating_null(const uint8_t * buffer, size_t length) {
+  String str;
+  str.reserve(length+1);
+  for(size_t i=0; i<length; i++)
+    str += (char)buffer[i];
+  return str;
+}
+
 size_t find_melody_by_name(const char * name) { return find_melody_by_name(String(name)); }
 size_t find_melody_by_name(const String & name) {
   for(size_t i=0; i<melodies_array_count; i++) {
@@ -584,10 +634,7 @@ size_t find_melody_by_name(const uint8_t * buffer, size_t length) {
     return INVALID_MELODY_INDEX;
   
   // Build a valid String from the first 'length' bytes of the given buffer
-  String test;
-  test.reserve(length+1);
-  for(size_t i=0; i<length; i++)
-    test += (char)buffer[i];
+  String test = parse_string_without_terminating_null(buffer, length);
 
   // Now search using a String
   return find_melody_by_name(test);
@@ -672,6 +719,8 @@ void setup() {
   doorbell.state.is_pressed = false;
   doorbell.entity.setState("OFF");
 
+  identify.state.is_on = false;
+
   // Set entity's state to publish an empty payload to the command/state topic (both are identical).
   // This will 'delete' the command topic until the button is pressed again.
   test_button.getState().setDirty();
@@ -688,10 +737,14 @@ void setup() {
   setup_mqtt();
 
   // setup a timer to prevent starting a new melody
-  melody_disabled_timer.setTimeOutTime(1);
-  melody_disabled_timer.reset();  //start counting now
+  doorbell_ringer_timer.setTimeOutTime(1);
+  doorbell_ringer_timer.reset();  //start counting now
   delay(10); // set our timer to be in "timed out" state.
-  melody_disabled_timer.setTimeOutTime(2500);
+  doorbell_ringer_timer.setTimeOutTime(2500);
+
+  // setup a timer to prevent playing the identify melody as soon as it ends.
+  identify_delay_timer.setTimeOutTime(2500);
+  identify_delay_timer.reset();
 }
 
 void loop() {
@@ -711,11 +764,11 @@ void loop() {
     doorbell.entity.setState(doorbell.state.is_pressed ? "ON" : "OFF");
   }
 
-  // Should we start a melody?
+  // Should we start a doorbell melody?
   if (doorbell.entity.getState().isDirty() &&
       doorbell.state.is_pressed && // do not trigger a melody when button is released 
       melody_selector.state.selected_melody < melodies_array_count &&
-      melody_disabled_timer.hasTimedOut() &&
+      doorbell_ringer_timer.hasTimedOut() &&
       !anyrtttl::nonblocking::isPlaying())
   {
     const char * selected_melody_buffer = melodies_array[melody_selector.state.selected_melody];
@@ -724,7 +777,22 @@ void loop() {
     anyrtttl::nonblocking::begin_P(BUZZER_PIN, selected_melody_buffer);
 
     // Update our timer
-    melody_disabled_timer.reset();  //start counting now
+    doorbell_ringer_timer.reset();  //start counting now
+  }
+
+  // Should we start the identify melody?
+  if (identify.state.is_on &&
+      identify_melody_index != INVALID_MELODY_INDEX &&
+      identify_delay_timer.hasTimedOut() &&
+      !anyrtttl::nonblocking::isPlaying())
+  {
+    const char * melody_buffer = melodies_array[identify_melody_index];
+    Serial.print("Playing: ");
+    Serial.println(melody_names[identify_melody_index]);
+    anyrtttl::nonblocking::begin_P(BUZZER_PIN, melody_buffer);
+
+    // Update our timer
+    identify_delay_timer.reset();  //start counting now
   }
 
   // If we are playing something, keep playing! 
