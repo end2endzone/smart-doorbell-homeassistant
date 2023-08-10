@@ -79,6 +79,7 @@ static const uint8_t BUZZER_PIN = D1;
 
 #define ERROR_MESSAGE_PREFIX "*** --> "
 #define MAX_PUBLISH_RETRY 5
+#define DELAY_BETWEEN_MQTT_TRANSACTIONS 100
 
 WiFiClient wifi_client;
 SoftTimer test_timer; //millisecond timer
@@ -547,7 +548,7 @@ void mqtt_reconnect() {
       // This will "disable" all entities in Home Assistant while we update.
       this_device.publishMqttDeviceStatus(false);
 
-      // Force all entities to update
+      // Force all entities to be discovered
       for(size_t i=0; i<entities_count; i++) {
         HaMqttEntity & entity = *(entities[i]);
 
@@ -561,6 +562,24 @@ void mqtt_reconnect() {
           }
         }
 
+        // Allow time for Home Assistant to properly 'discover' the previous entity
+        #ifdef DELAY_BETWEEN_MQTT_TRANSACTIONS
+        delay(DELAY_BETWEEN_MQTT_TRANSACTIONS);
+        #endif
+
+        // Subscribe to receive entity state change notifications
+        entity.subscribe();
+      }
+
+      // Allow time for Home Assistant to properly 'discover' the previous entity
+      #ifdef DELAY_BETWEEN_MQTT_TRANSACTIONS
+      delay(DELAY_BETWEEN_MQTT_TRANSACTIONS);
+      #endif
+
+      // Force all entities to be updated
+      for(size_t i=0; i<entities_count; i++) {
+        HaMqttEntity & entity = *(entities[i]);
+
         // Publish entity's state to initialize Home Assistant UI
         entity.getState().setDirty();
         success = false;
@@ -572,12 +591,22 @@ void mqtt_reconnect() {
           }
         }
 
-        // Subscribe to receive entity state change notifications
-        entity.subscribe();
+        // Allow time for Home Assistant to properly 'discover' the previous entity
+        #ifdef DELAY_BETWEEN_MQTT_TRANSACTIONS
+        delay(DELAY_BETWEEN_MQTT_TRANSACTIONS);
+        #endif
       }
 
       // Set device as back "online"
-      this_device.publishMqttDeviceStatus(true);
+      // Home assistant has issue detecting the 'online' state.
+      // Update the status again a few times to prevent this issue as much as possible.
+      for(size_t i=0; i<3; i++) {
+        this_device.publishMqttDeviceStatus(true);
+        
+        #ifdef DELAY_BETWEEN_MQTT_TRANSACTIONS
+        delay(DELAY_BETWEEN_MQTT_TRANSACTIONS);
+        #endif
+      }
     }
     
   }
@@ -761,6 +790,7 @@ void setup() {
 void loop() {
   // make sure mqtt is working
   if (!mqtt_client.connected()) {
+    yield();
     mqtt_reconnect();
   }
   mqtt_client.loop();
@@ -781,7 +811,7 @@ void loop() {
     bell_sensor.state.detected = true;
     bell_sensor.entity.setState(bell_sensor.state.detected ? "ON" : "OFF");
 
-    // Start a time to stop overriding the BELL sensor
+    // Start a time to stop overriding the bell sensor
     test_timer.reset();
   }
   if (test_button.state.is_pressed && test_timer.hasTimedOut()) {
@@ -844,6 +874,8 @@ void loop() {
         }
       }
 
+      // Limit publishing 1 entity state per loop.
+      break;
     }
   }
 }
