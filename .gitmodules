@@ -1,0 +1,6 @@
+[submodule "fritzing-parts/esp8266_fritzing"]
+	path = fritzing-parts/esp8266_fritzing
+	url = https://github.com/prasertsakd/esp8266_fritzing.git
+[submodule "fritzing-parts/esp8266-fritzing-parts"]
+	path = fritzing-parts/esp8266-fritzing-parts
+	url = https://github.com/squix78/esp8266-fritzing-parts.git
