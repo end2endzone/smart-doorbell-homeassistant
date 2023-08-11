@@ -4,3 +4,6 @@
 [submodule "fritzing-parts/esp8266-fritzing-parts"]
 	path = fritzing-parts/esp8266-fritzing-parts
 	url = https://github.com/squix78/esp8266-fritzing-parts.git
+[submodule "fritzing-parts/adafruit-Fritzing-Library"]
+	path = fritzing-parts/adafruit-Fritzing-Library
+	url = https://github.com/adafruit/Fritzing-Library.git
