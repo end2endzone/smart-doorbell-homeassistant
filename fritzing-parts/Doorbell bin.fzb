@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module fritzingVersion="0.9.3b.04.19.5c895d327c44a3114e5fcc9d8260daf0cbb52806" icon="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot; standalone=&quot;no&quot;?&gt;&#13;&#10;&lt;svg width=&quot;8.46667mm&quot; height=&quot;8.74889mm&quot;&#13;&#10; viewBox=&quot;0 0 30 31&quot;&#13;&#10; xmlns=&quot;http://www.w3.org/2000/svg&quot; xmlns:xlink=&quot;http://www.w3.org/1999/xlink&quot;  version=&quot;1.2&quot; baseProfile=&quot;tiny&quot;&gt;&#13;&#10;&lt;title&gt;Fritzing Custom Icon&lt;/title&gt;&#13;&#10;&lt;desc&gt;Generated with Qt&lt;/desc&gt;&#13;&#10;&lt;defs&gt;&#13;&#10;&lt;/defs&gt;&#13;&#10;&lt;g fill=&quot;none&quot; stroke=&quot;black&quot; stroke-width=&quot;1&quot; fill-rule=&quot;evenodd&quot; stroke-linecap=&quot;square&quot; stroke-linejoin=&quot;bevel&quot; &gt;&#13;&#10;&#13;&#10;&lt;image x=&quot;0&quot; y=&quot;0&quot; width=&quot;30&quot; height=&quot;31&quot; preserveAspectRatio=&quot;none&quot; xlink:href=&quot;data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAfCAMAAADHso01AAAAKlBMVEUAAACyMCWyMCWyMCWyMCWyMCWyMCWyMCWyMCWyMCWyMCWyMCWyMCX///8TrXlEAAAADHRSTlMAIL+fUEDfz4Bg7xDrAx85AAAACXBIWXMAAAsTAAALEwEAmpwYAAAAWElEQVQokd2RQRLAIAgDVbS1mv+/11NbAZ3c3esOAyEhHE9ML7LSgo/sbfktLq/vSaNa+8wWLWrbm9Iw11UYigplLdIm1GqcTJPd7HKSm32N/Zw0xvo+jAG5XQp/KqDemwAAAABJRU5ErkJggg==&quot; /&gt;&#13;&#10;&lt;/g&gt;&#13;&#10;&lt;/svg&gt;&#13;&#10;">
+    <title>Doorbell</title>
+    <instances>
+        <instance moduleIdRef="Mini-360_850109602f1429a6e614bc76b93b083e_1" modelIndex="85443885" path="C:/Users/Antoine/Documents/Fritzing/parts/contrib/Mini-360_850109602f1429a6e614bc76b93b083e_1.fzp">
+            <views/>
+        </instance>
+        <instance moduleIdRef="NodeMCU v1_ec83652eb5f35f6ec40972b5e32f3bd9_1" modelIndex="85443886" path="C:/Users/Antoine/Documents/Fritzing/parts/contrib/NodeMCU v1_ec83652eb5f35f6ec40972b5e32f3bd9_1.fzp" flippedSMD="true">
+            <property name="flippedSMD" value="true"/>
+            <views/>
+        </instance>
+        <instance moduleIdRef="ResistorModuleID" modelIndex="85446508" path="D:/Apps/fritzing/fritzing.0.9.3b.64.pc/fritzing-parts/core/resistor.fzp">
+            <views/>
+        </instance>
+        <instance moduleIdRef="SmallElectrolyticCapacitorModuleID" modelIndex="85446509" path="D:/Apps/fritzing/fritzing.0.9.3b.64.pc/fritzing-parts/core/capacitor_electrolytic_small.fzp">
+            <views/>
+        </instance>
+        <instance moduleIdRef="20A9BBEE34_ST" modelIndex="85446510" path="D:/Apps/fritzing/fritzing.0.9.3b.64.pc/fritzing-parts/core/pushbutton_4_horizontal.fzp">
+            <views/>
+        </instance>
+        <instance moduleIdRef="8abf6496b5d466c7a1893c17a296a676" modelIndex="85446511" path="D:/Apps/fritzing/fritzing.0.9.3b.64.pc/fritzing-parts/core/piezo sensor.fzp">
+            <views/>
+        </instance>
+        <instance moduleIdRef="c0e65b2d0c9003507cf4a3222e995a45" modelIndex="85446512" path="D:/Apps/fritzing/fritzing.0.9.3b.64.pc/fritzing-parts/core/reedSwitch_500mil.fzp">
+            <views/>
+        </instance>
+        <instance moduleIdRef="NPN-to92-ebc" modelIndex="85446623" path="D:/Apps/fritzing/fritzing.0.9.3b.64.pc/fritzing-parts/core/transistor_signal_NPN_TO92_EBC.fzp">
+            <views/>
+        </instance>
+        <instance moduleIdRef="3254CBFC44diode" modelIndex="85446624" path="D:/Apps/fritzing/fritzing.0.9.3b.64.pc/fritzing-parts/core/diode_1N4001_300mil.fzp">
+            <views/>
+        </instance>
+        <instance moduleIdRef="screw_terminal_2_3.5mm" modelIndex="85447416" path="D:/Apps/fritzing/fritzing.0.9.3b.64.pc/fritzing-parts/core/screw_terminal_2_3.5mm.fzp">
+            <views/>
+        </instance>
+        <instance moduleIdRef="Breadboard-RSR03MB102-ModuleID" modelIndex="85448153" path="D:/Apps/fritzing/fritzing.0.9.3b.64.pc/fritzing-parts/core/breadboard2.fzp">
+            <views/>
+        </instance>
+        <instance moduleIdRef="30.20PerfboardModuleID" modelIndex="85448154" path=":/resources/parts/core/30.20PerfboardModuleID.fzp">
+            <views/>
+        </instance>
+        <instance moduleIdRef="30.20Stripboard2ModuleID" modelIndex="85448155" path=":/resources/parts/core/30.20Stripboard2ModuleID.fzp">
+            <views/>
+        </instance>
+    </instances>
+</module>
