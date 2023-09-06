@@ -19,6 +19,29 @@
 
 using namespace HaMqttDiscovery;
 
+//************************************************************
+//   Constants
+//************************************************************
+
+static const char * wifi_ssid = SECRET_WIFI_SSID;
+static const char * wifi_pass = SECRET_WIFI_PASS;
+static const char* mqtt_server = SECRET_MQTT_HOST;
+static const char* mqtt_user = SECRET_MQTT_USER;
+static const char* mqtt_pass = SECRET_MQTT_PASS;
+
+static const uint8_t LED0_PIN = 2;
+static const uint8_t LED1_PIN = 16;
+static const uint8_t DOORBELL_PIN = D5;
+static const uint8_t BUZZER_PIN = D1;
+
+#define ERROR_MESSAGE_PREFIX "*** --> "
+#define MAX_PUBLISH_RETRY 5
+#define DELAY_BETWEEN_MQTT_TRANSACTIONS 100
+
+//************************************************************
+//   Variables
+//************************************************************
+
 struct LED_STATE {
   bool is_on;
   uint8_t brightness;
@@ -62,26 +85,8 @@ struct SMART_BUTTON {
   BUTTON_STATE previous;
 };
 
-//************************************************************
-//   Variables
-//************************************************************
-
-const char * wifi_ssid = SECRET_WIFI_SSID;
-const char * wifi_pass = SECRET_WIFI_PASS;
-const char* mqtt_server = SECRET_MQTT_HOST;
-const char* mqtt_user = SECRET_MQTT_USER;
-const char* mqtt_pass = SECRET_MQTT_PASS;
-
-static const uint8_t LED0_PIN = 2;
-static const uint8_t LED1_PIN = 16;
-static const uint8_t DOORBELL_PIN = D5;
-static const uint8_t BUZZER_PIN = D1;
-
-#define ERROR_MESSAGE_PREFIX "*** --> "
-#define MAX_PUBLISH_RETRY 5
-#define DELAY_BETWEEN_MQTT_TRANSACTIONS 100
-
 WiFiClient wifi_client;
+SoftTimer hello_timer; //millisecond timer
 SoftTimer test_timer; //millisecond timer
 SoftTimer doorbell_ringer_timer; //millisecond timer, to delay between each doorbell ring
 SoftTimer identify_delay_timer; //millisecond timer, to delay between each play of the identify RTTTL melody.
@@ -163,6 +168,7 @@ void setup_wifi();
 void setup_device();
 void setup_led(size_t led_index);
 void setup_mqtt();
+void play_hello_animation();
 void led_turn_on(size_t led_index, uint8_t brightness);
 void led_turn_off(size_t led_index);
 size_t print_cstr_without_terminating_null(const char* str, size_t length, size_t max_chunk_size);
@@ -182,6 +188,28 @@ void timer_force_timed_out(SoftTimer & timer);
 //************************************************************
 //   Function definitions
 //************************************************************
+
+void play_hello_animation() {
+  digitalWrite(LED0_PIN, HIGH); // OFF
+  digitalWrite(LED1_PIN, HIGH); // OFF
+
+  hello_timer.setTimeOutTime(500);
+  hello_timer.reset();
+
+  static const int ANIMATION_COUNT = 4;
+  for(int i=0; i<ANIMATION_COUNT; i++) {
+    int hello_pin = (i%2 == 0 ? LED0_PIN : LED1_PIN);
+    hello_timer.reset();  //start counting now
+
+    while(!hello_timer.hasTimedOut()) {
+      digitalWrite(hello_pin, LOW); // ON
+      delay(50);
+      digitalWrite(hello_pin, HIGH); // OFF
+      delay(50);
+    }
+    delay(500);
+  }
+}
 
 void led_turn_on(size_t led_index, uint8_t brightness = 255) {
   SMART_LED & led = *(leds[led_index]);
@@ -731,15 +759,17 @@ void setup() {
   pinMode(LED1_PIN, OUTPUT);
   pinMode(BUZZER_PIN, OUTPUT);
 
+  Serial.begin(115200);
+  Serial.println("READY!");
+
+  play_hello_animation();
+
   bell_sensor_reader.begin();
 
   led0.pin = LED0_PIN;
   led1.pin = LED1_PIN;
 
   publish_adaptor.setPubSubClient(&mqtt_client);
-
-  Serial.begin(115200);
-  Serial.println("READY!");
 
   HaMqttDiscovery::error_message_prefix = ERROR_MESSAGE_PREFIX;  
   
