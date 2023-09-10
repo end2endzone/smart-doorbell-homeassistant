@@ -91,8 +91,9 @@ SoftTimer test_timer; //millisecond timer
 SoftTimer doorbell_ringer_timer; //millisecond timer, to delay between each doorbell ring
 SoftTimer identify_delay_timer; //millisecond timer, to delay between each play of the identify RTTTL melody.
 
-static const char * device_identifier_prefix = "doorbell";
-String device_identifier; // defined as device_identifier_prefix followed by device mac address without ':' characters.
+static const String device_identifier_prefix = "doorbell";
+String device_identifier_postfix;  // matches the last 4 digits of the MAC address
+String device_identifier; // defined as device_identifier_prefix followed by device_identifier_postfix
 
 // MQTT support variables
 PubSubClient mqtt_client(wifi_client);
@@ -303,25 +304,22 @@ void setup_wifi() {
 void setup_device() {
   device_identifier.clear();
   device_identifier.reserve(32);
-  device_identifier = device_identifier_prefix;
 
   // append mac address characters
-  String mac_addr = WiFi.macAddress();
-  const char * input = mac_addr.c_str();
-  uint16_t length = 0;
-  while(input && input[0] != '\0' && length < 18) {
-    if (*input != ':') {
-      device_identifier += *input;
-      length++;
-    }
-    input++;
+  device_identifier_postfix = WiFi.macAddress();
+  device_identifier_postfix.replace(":", ""); // remove : characters from the mac address
+  while(device_identifier_postfix.length() > 4) {
+    device_identifier_postfix.remove(0, 1);
   }
+  
+  device_identifier = device_identifier_prefix + "-" + device_identifier_postfix;
+
   Serial.print("Device identifier: ");
   Serial.println(device_identifier);
 
   // Configure this device attributes
   this_device.addIdentifier(device_identifier);
-  this_device.setName("Smart doorbell");
+  this_device.setName("Smart doorbell " + device_identifier_postfix);
   this_device.setManufacturer("end2endzone");
   this_device.setModel("ESP8266");
   this_device.setHardwareVersion("1.0");

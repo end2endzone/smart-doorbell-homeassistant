@@ -72,6 +72,10 @@ class HaMqttDevice {
       return (size_t)-1;
     }
 
+    const EntityPtrVector & getEntities() const {
+      return entities;
+    }
+
     void addIdentifier(const char * value) { addIdentifier(String(value)); }
     void addIdentifier(const String & value) {
         identifiers.push_back(value);

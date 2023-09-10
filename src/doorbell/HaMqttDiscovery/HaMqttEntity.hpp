@@ -15,6 +15,8 @@ class HaMqttEntity;
 class HaMqttEntity {
   public:
 
+    static const size_t INVALID_ENTITY_INDEX = (size_t)-1;
+
     struct STATIC_CSTR_ARRAY {
       const char ** values;
       size_t count;      
@@ -130,21 +132,57 @@ class HaMqttEntity {
         return state;
     }
 
-    void setUniqueIdFromDeviceId() {
-      if (device) {
-        const String * first_device_identifier = device->getIdentifier(0);
-        if (first_device_identifier) {
-
-          // Is this entity already added to the device ?
-          size_t entity_index = device->getEntityIndex(this);
-          if (entity_index == (size_t)-1)
-            entity_index = device->addEntity(this);
-          
-          // Build a new unique_id
-          String new_unique_id = (*first_device_identifier) + "_" + toString(type) + String(entity_index);
-          unique_id = new_unique_id;
-        }
+    size_t getEntityIndexForIntegrationType() {
+      if (!device)
+        return INVALID_ENTITY_INDEX;
+      
+      // Is this entity already added to the device ?
+      if (device->getEntityIndex(this) == INVALID_ENTITY_INDEX) {
+        device->addEntity(this);
       }
+
+      const HaMqttDevice::EntityPtrVector & entities = device->getEntities();
+
+      size_t type_based_index = 0;
+      for(size_t i=0; i<entities.size(); i++) {
+        const HaMqttEntity * e = entities[i];
+        if (this == e) {
+          return type_based_index;
+        }
+        if (e->getIntegrationType() == type)
+          type_based_index++;
+      }
+      return INVALID_ENTITY_INDEX;
+    }
+
+    void setUniqueIdFromDeviceId() {
+      if (!device)
+        return;
+      const String * first_device_identifier = device->getIdentifier(0);
+      if (!first_device_identifier)
+        return;
+
+      // Is this entity already added to the device ?
+      if (device->getEntityIndex(this) == INVALID_ENTITY_INDEX) {
+        device->addEntity(this);
+      }
+      size_t entity_index = getEntityIndexForIntegrationType();
+      
+      // Build a new unique_id
+      String new_unique_id = (*first_device_identifier) + "_" + toString(type) + String(entity_index);
+      unique_id = new_unique_id;
+    }
+
+    void setObjectIdFromDeviceIdAndEntityName() {
+      if (!device)
+        return;
+      const String * first_device_identifier = device->getIdentifier(0);
+      if (!first_device_identifier)
+        return;
+
+      // Build a new object_id
+      String new_object_id = (*first_device_identifier) + "_" + this->name;
+      object_id = new_object_id;
     }
 
     void setDevice(HaMqttDevice * device) {
@@ -153,6 +191,11 @@ class HaMqttEntity {
       // Can we generate an automatic unique_id for this entity ?
       if (unique_id.isEmpty()) {
         setUniqueIdFromDeviceId();
+      }
+
+      // Can we generate an automatic object_id for this entity ?
+      if (object_id.isEmpty()) {
+        setObjectIdFromDeviceIdAndEntityName();
       }
     }
 
