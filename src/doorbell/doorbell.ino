@@ -25,7 +25,6 @@ using namespace HaMqttDiscovery;
 
 static const char * wifi_ssid = SECRET_WIFI_SSID;
 static const char * wifi_pass = SECRET_WIFI_PASS;
-static const char* mqtt_server = SECRET_MQTT_HOST;
 static const char* mqtt_user = SECRET_MQTT_USER;
 static const char* mqtt_pass = SECRET_MQTT_PASS;
 
@@ -84,6 +83,8 @@ struct SMART_BUTTON {
   BUTTON_STATE state;
   BUTTON_STATE previous;
 };
+
+String mqtt_server = SECRET_MQTT_SERVER_IP;
 
 WiFiClient wifi_client;
 SoftTimer hello_timer; //millisecond timer
@@ -172,6 +173,9 @@ void setup_mqtt();
 void play_hello_animation();
 void led_turn_on(size_t led_index, uint8_t brightness);
 void led_turn_off(size_t led_index);
+bool is_digit(const char c);
+bool is_ip_address(const char * value);
+String ip_to_string(const ip_addr_t * ipaddr);
 size_t print_cstr_without_terminating_null(const char* str, size_t length, size_t max_chunk_size);
 void mqtt_subscription_callback(const char* topic, const byte* payload, unsigned int length);
 void mqtt_reconnect();
@@ -254,6 +258,31 @@ void led_turn_off(size_t led_index) {
   Serial.println(" off");
 }
 
+bool is_digit(const char c) {
+  if (c >= '0' && c <= '9')
+    return true;
+  return false;
+}
+
+bool is_ip_address(const char * value) {
+  if (value == NULL) return false;
+  while(*value != '\0') {
+    bool valid = (*value == '.' || is_digit(*value));
+    if (!valid)
+      return false;
+    value++;
+  }
+  return true;
+}
+
+String ip_to_string(const ip_addr_t * ipaddr) {
+  if (ipaddr == NULL) return String("INVALID");
+
+  IPAddress tmp;
+  tmp = ipaddr->addr;
+  return tmp.toString();
+}
+
 void setup_melody_names() {
   for(size_t i=0; i<melodies_array_count; i++) {
     // Find the name of this rtttl melody
@@ -296,6 +325,20 @@ void setup_wifi() {
   Serial.println(WiFi.macAddress());
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
+  
+  // Print registered DNS server IP addresses.
+  for(uint8_t i=0; i<=1; i++) {
+    const ip_addr_t* dns_server = dns_getserver(i);
+    if (dns_server) {
+      String dns_ip = ip_to_string(dns_server);
+      Serial.println("DNS " + String(i) + " server IP address is set to " + dns_ip + ".");
+    }
+    
+    // Only print an error message when getting DNS 0
+    if (dns_server == NULL && i == 0) {
+      Serial.println("Failed to get DNS " + String(i) + " server address. No DNS server is set!");
+    }
+  }
   
   // init random number generator
   randomSeed(micros());
@@ -382,7 +425,24 @@ void setup_led(size_t led_index) {
 }
 
 void setup_mqtt() {
-  mqtt_client.setServer(mqtt_server, 1883);
+  // Convert MQTT server host to an IP, if required.
+  if (!is_ip_address(mqtt_server.c_str())) {
+    String host = mqtt_server;
+    Serial.println("Resolving IP address of '" + host + "'.");
+
+    // resolve ip address of host name
+    IPAddress remote_ip;
+    remote_ip.clear();
+    if (WiFi.hostByName(host.c_str(), remote_ip) == 1) {
+      mqtt_server = remote_ip.toString(); // override host name with actual IP address
+      Serial.println("Found IP address '" + mqtt_server + "'.");
+    } else {
+      Serial.println("Failed to resolve IP. Keeping hostname for connection...");
+    }
+  }
+
+  Serial.println("MQTT server IP address set to '" + mqtt_server + "'.");
+  mqtt_client.setServer(mqtt_server.c_str(), 1883);
   mqtt_client.setCallback(mqtt_subscription_callback);
   mqtt_client.setKeepAlive(30);
   
