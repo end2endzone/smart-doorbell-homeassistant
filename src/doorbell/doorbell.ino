@@ -86,8 +86,8 @@ String mqtt_server = SECRET_MQTT_SERVER_IP;
 WiFiClient wifi_client;
 SoftTimer hello_timer; //millisecond timer to show a LED flashing animation when booting.
 SoftTimer test_timer; //millisecond timer to force the magnetic ring detection when TEST button is pressed.
-SoftTimer led_activity_timer; //millisecond timer to automatically turn off the ACTIVITY led.
-SoftTimer doorbell_ringer_timer; //millisecond timer, to delay between each doorbell ring
+SoftTimer activity_off_timer; //millisecond timer to automatically turn off the ACTIVITY led.
+SoftTimer doorbell_ring_delay_timer; //millisecond timer, to delay between each doorbell ring
 SoftTimer identify_delay_timer; //millisecond timer, to delay between each play of the identify RTTTL melody.
 
 static const String device_identifier_prefix = "doorbell";
@@ -472,7 +472,7 @@ void mqtt_subscription_callback(const char* topic, const byte* payload, unsigned
     Serial.println();
   }
 
-  // is this a MELODY selector command topic?
+  // Is this a MELODY selector command topic?
   if (melody_selector.entity.getCommandTopic() == topic) {
     if (printable) {
       size_t melody_name_index = find_melody_by_name(payload, length);
@@ -485,7 +485,7 @@ void mqtt_subscription_callback(const char* topic, const byte* payload, unsigned
     }
   }
 
-  // is this a TEST button command topic?
+  // Is this a TEST button command topic?
   if (test_button.entity.getCommandTopic() == topic) {
     // Interrupt what ever we are playing.
     if (anyrtttl::nonblocking::isPlaying())
@@ -498,7 +498,7 @@ void mqtt_subscription_callback(const char* topic, const byte* payload, unsigned
     return; // this topic is handled
   }
 
-  // is this the IDENTIFY switch command topic?
+  // Is this the IDENTIFY switch command topic?
   if (identify.entity.getCommandTopic() == topic) {
     // Interrupt what ever we are playing.
     if (anyrtttl::nonblocking::isPlaying())
@@ -799,21 +799,21 @@ void setup() {
   setup_device();
   setup_mqtt();
 
-  // setup a timer to prevent starting a new melody
-  timer_force_timed_out(doorbell_ringer_timer);
-  doorbell_ringer_timer.setTimeOutTime(5000);
+  // Setup a timer to prevent starting a new melody
+  timer_force_timed_out(doorbell_ring_delay_timer);
+  doorbell_ring_delay_timer.setTimeOutTime(5000);
 
-  // setup a timer to prevent playing the identify melody as soon as it ends.
+  // Setup a timer to prevent playing the identify melody as soon as it ends.
   identify_delay_timer.setTimeOutTime(2500);
   identify_delay_timer.reset();
 
-  // setup a timer to compute how long do we force the bell sensor to be ON.
+  // Setup a timer to compute how long do we force the bell sensor to be ON.
   timer_force_timed_out(test_timer);
   test_timer.setTimeOutTime(200);
 
-  // setup a timer to compute how long do we force the ACTIVITY led to be ON.
-  timer_force_timed_out(led_activity_timer);
-  led_activity_timer.setTimeOutTime(500);
+  // Setup a timer to compute how long do we force the ACTIVITY led to be ON.
+  timer_force_timed_out(activity_off_timer);
+  activity_off_timer.setTimeOutTime(500);
 }
 
 void loop() {
@@ -827,7 +827,7 @@ void loop() {
   // Did we waited long enough between each detection?
   // This prevents sending multiple signals to Home Assistant when one repeatedly press the doorbell.
   bool allow_new_ring_detections = false;
-  if (doorbell_ringer_timer.hasTimedOut()) {
+  if (doorbell_ring_delay_timer.hasTimedOut()) {
     allow_new_ring_detections = true;
   }
 
@@ -867,15 +867,15 @@ void loop() {
 
   // Did we detected new ACTIVITY during this pass?
   if (bell_sensor.state.detected && bell_sensor.entity.getState().isDirty()) {
-    doorbell_ringer_timer.reset();  //start counting now to know when is the next time allowed to trigger a ring.
+    doorbell_ring_delay_timer.reset();  //start counting now to know when is the next time allowed to trigger a ring.
 
     // Turn the ACTIVITY led on
     led_turn_on(&led_activity);
-    led_activity_timer.reset(); //start counting now
+    activity_off_timer.reset(); //start counting now
   }
 
   // Should we turn off the ACTIVITY led status?
-  if (led_activity.is_on && led_activity_timer.hasTimedOut()) {
+  if (led_activity.is_on && activity_off_timer.hasTimedOut()) {
     led_turn_off(&led_activity);
   }
 
@@ -891,7 +891,7 @@ void loop() {
     anyrtttl::nonblocking::begin_P(BUZZER_PIN, selected_melody_buffer);
 
     // Update our timer
-    doorbell_ringer_timer.reset();  //start counting now
+    doorbell_ring_delay_timer.reset();  //start counting now
   }
 
   // Should we start the identify melody?
