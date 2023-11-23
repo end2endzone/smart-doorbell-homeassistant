@@ -860,7 +860,6 @@ void loop() {
       bell_sensor.entity.setState(bell_sensor.state.detected ? "ON" : "OFF");
     }
   }
-  bell_sensor.previous = bell_sensor.state; // remember previous state
 
   // Did we pressed the TEST button?
   if (test_button.previous.is_pressed == false && test_button.state.is_pressed && allow_new_ring_detections) {
@@ -874,11 +873,14 @@ void loop() {
   if (test_button.state.is_pressed && test_timer.hasTimedOut()) {
     // Force the state of the bell sensor to OFF
     bell_sensor.state.detected = false;
-    bell_sensor.entity.setState(bell_sensor.state.detected ? "ON" : "OFF");
+
+    // Only update the MQTT state if the boolean state has actually transitioned.
+    if (bell_sensor.previous.detected != bell_sensor.state.detected) {
+      bell_sensor.entity.setState(bell_sensor.state.detected ? "ON" : "OFF");
+    }
 
     test_button.state.is_pressed = false;
   }
-  test_button.previous = test_button.state; // remember previous state
 
   // Did we detected new ACTIVITY during this pass?
   if (bell_sensor.state.detected && bell_sensor.entity.getState().isDirty()) {
@@ -948,4 +950,8 @@ void loop() {
       break;
     }
   }
+
+  // Remember previous states
+  test_button.previous = test_button.state; 
+  bell_sensor.previous = bell_sensor.state;
 }
