@@ -86,6 +86,8 @@ String mqtt_server = SECRET_MQTT_SERVER_IP;
 WiFiClient wifi_client;
 SoftTimer hello_timer; //millisecond timer to show a LED flashing animation when booting.
 SoftTimer test_timer; //millisecond timer to force the magnetic ring detection when TEST button is pressed.
+SoftTimer online_on_timer; //millisecond timer to define how long the ONLINE led must be ON.
+SoftTimer online_off_timer; //millisecond timer to define how long the ONLINE led must be OFF.
 SoftTimer activity_off_timer; //millisecond timer to automatically turn off the ACTIVITY led.
 SoftTimer doorbell_ring_delay_timer; //millisecond timer, to delay between each doorbell ring
 SoftTimer identify_delay_timer; //millisecond timer, to delay between each play of the identify RTTTL melody.
@@ -229,18 +231,12 @@ void led_turn_on(LED_STATE * led) {
   // it is active low on the ESP-01)
   digitalWrite(led->pin, LOW); // ON
   led->is_on = true;
-
-  String msg = String() + "Set '" + led->name + "' led on";
-  Serial.println(msg);
 }
 
 void led_turn_off(LED_STATE * led) {
   // Turn the LED off by making the voltage HIGH
   digitalWrite(led->pin, HIGH); // OFF
   led->is_on = false;
-
-  String msg = String() + "Set '" + led->name + "' led off";
-  Serial.println(msg);
 }
 
 bool is_digit(const char c) {
@@ -629,6 +625,7 @@ void mqtt_reconnect() {
       }
 
       led_turn_on(&led_online);
+      online_on_timer.reset();  //start counting now
     }
     
   }
@@ -813,7 +810,13 @@ void setup() {
 
   // Setup a timer to compute how long do we force the ACTIVITY led to be ON.
   timer_force_timed_out(activity_off_timer);
-  activity_off_timer.setTimeOutTime(500);
+  activity_off_timer.setTimeOutTime(1000);
+
+  // Setup a timer to compute how long the ONLINE led should be ON.
+  online_on_timer.setTimeOutTime(100);
+
+  // Setup a timer to compute how long the ONLINE led should be OFF.
+  online_off_timer.setTimeOutTime(4900);
 }
 
 void loop() {
@@ -823,6 +826,18 @@ void loop() {
     mqtt_reconnect();
   }
   mqtt_client.loop();
+
+  // Process the ONLINE led blink update.
+  // Should the ONLINE led turn off?
+  if (led_online.is_on && online_on_timer.hasTimedOut()) {
+    led_turn_off(&led_online);
+    online_off_timer.reset();  //start counting now
+  }
+  // Should the ONLINE led turn on?
+  if (!led_online.is_on && online_off_timer.hasTimedOut()) {
+    led_turn_on(&led_online);
+    online_on_timer.reset();  //start counting now
+  }
 
   // Did we waited long enough between each detection?
   // This prevents sending multiple signals to Home Assistant when one repeatedly press the doorbell.
