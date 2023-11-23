@@ -42,13 +42,9 @@ static const uint8_t BUZZER_PIN = D1;
 //************************************************************
 
 struct LED_STATE {
-  bool is_on;
-  uint8_t brightness;
-};
-struct SMART_LED {
   uint8_t pin;
-  HaMqttEntity entity;
-  LED_STATE state;
+  bool is_on;
+  const char * name;
 };
 
 struct BELL_SENSOR_STATE {
@@ -57,6 +53,7 @@ struct BELL_SENSOR_STATE {
 struct SMART_BELL_SENSOR {
   HaMqttEntity entity;
   BELL_SENSOR_STATE state;
+  BELL_SENSOR_STATE previous;
 };
 
 struct MELODY_STATE {
@@ -87,8 +84,9 @@ struct SMART_BUTTON {
 String mqtt_server = SECRET_MQTT_SERVER_IP;
 
 WiFiClient wifi_client;
-SoftTimer hello_timer; //millisecond timer
-SoftTimer test_timer; //millisecond timer
+SoftTimer hello_timer; //millisecond timer to show a LED flashing animation when booting.
+SoftTimer test_timer; //millisecond timer to force the magnetic ring detection when TEST button is pressed.
+SoftTimer led_activity_timer; //millisecond timer to automatically turn off the ACTIVITY led.
 SoftTimer doorbell_ringer_timer; //millisecond timer, to delay between each doorbell ring
 SoftTimer identify_delay_timer; //millisecond timer, to delay between each play of the identify RTTTL melody.
 
@@ -103,9 +101,9 @@ MqttAdaptorPubSubClient publish_adaptor;
 // Home Assistant support variables
 HaMqttDevice this_device;
 
-SMART_LED led0;
-SMART_LED led1;
-SMART_LED * leds[] = {&led0, &led1};
+LED_STATE led_online;
+LED_STATE led_activity;
+LED_STATE * leds[] = {&led_online, &led_activity};
 size_t leds_count = sizeof(leds)/sizeof(leds[0]);
 
 Button bell_sensor_reader(DOORBELL_PIN);
@@ -119,8 +117,6 @@ SMART_SWITCH identify;
 size_t identify_melody_index = 0;
 
 HaMqttEntity * entities[] = {
-  &led0.entity,
-  &led1.entity,
   &bell_sensor.entity,
   &melody_selector.entity,
   &test_button.entity,
@@ -168,11 +164,12 @@ void setup();
 void setup_melody_names();
 void setup_wifi();
 void setup_device();
-void setup_led(size_t led_index);
 void setup_mqtt();
 void play_hello_animation();
-void led_turn_on(size_t led_index, uint8_t brightness);
+void led_turn_on(size_t led_index);
 void led_turn_off(size_t led_index);
+void led_turn_on(LED_STATE * led);
+void led_turn_off(LED_STATE * led);
 bool is_digit(const char c);
 bool is_ip_address(const char * value);
 String ip_to_string(const ip_addr_t * ipaddr);
@@ -216,46 +213,34 @@ void play_hello_animation() {
   }
 }
 
-void led_turn_on(size_t led_index, uint8_t brightness = 255) {
-  SMART_LED & led = *(leds[led_index]);
-
-  if (brightness == 255) {
-    // Turn the LED on (Note that LOW is the voltage level
-    // but actually the LED is on; this is because
-    // it is active low on the ESP-01)
-    digitalWrite(led.pin, LOW); // ON
-
-    Serial.print("Set LED-");
-    Serial.print(led_index);
-    Serial.println(" on");
-  }
-  else {
-    //LED pin brightness is inverted. 0 is 100% and 255 is 0%
-    uint8_t pwm_brightness = map(brightness, 0, 255, 255, 0);
-    
-    analogWrite(led.pin, pwm_brightness);
-    Serial.print("Set LED-");
-    Serial.print(led_index);
-    Serial.print(" brightness to ");
-    Serial.println(pwm_brightness);
-  }
-  
-  led.state.is_on = true;
-  led.state.brightness = brightness;
-  led.entity.setState(String() + "{\"state\":\"ON\",\"brightness\":" + String(led.state.brightness) + "}");
+void led_turn_on(size_t led_index) {
+  LED_STATE & led = *(leds[led_index]);
+  led_turn_on(&led);
 }
 
 void led_turn_off(size_t led_index) {
-  SMART_LED & led = *(leds[led_index]);
+  LED_STATE & led = *(leds[led_index]);
+  led_turn_off(&led);
+}
 
+void led_turn_on(LED_STATE * led) {
+  // Turn the LED on (Note that LOW is the voltage level
+  // but actually the LED is on; this is because
+  // it is active low on the ESP-01)
+  digitalWrite(led->pin, LOW); // ON
+  led->is_on = true;
+
+  String msg = String() + "Set '" + led->name + "' led on";
+  Serial.println(msg);
+}
+
+void led_turn_off(LED_STATE * led) {
   // Turn the LED off by making the voltage HIGH
-  digitalWrite(led.pin, HIGH); // OFF
-  led.state.is_on = false;
-  led.entity.setState(String() + "{\"state\":\"OFF\",\"brightness\":" + String(led.state.brightness) + "}");
+  digitalWrite(led->pin, HIGH); // OFF
+  led->is_on = false;
 
-  Serial.print("Set LED-");
-  Serial.print(led_index);
-  Serial.println(" off");
+  String msg = String() + "Set '" + led->name + "' led off";
+  Serial.println(msg);
 }
 
 bool is_digit(const char c) {
@@ -369,9 +354,6 @@ void setup_device() {
   this_device.setSoftwareVersion("0.1");
   this_device.setMqttAdaptor(&publish_adaptor);
 
-  setup_led(0);
-  setup_led(1);
-
   // Configure DOORBELL entity attributes
   bell_sensor.entity.setIntegrationType(HA_MQTT_BINARY_SENSOR);
   bell_sensor.entity.setName("Bell");
@@ -405,23 +387,6 @@ void setup_device() {
   identify.entity.addKeyValue("device_class","switch");
   identify.entity.setDevice(&this_device); // this also adds the entity to the device and generates a unique_id based on the first identifier of the device.
   identify.entity.setMqttAdaptor(&publish_adaptor);
-}
-
-void setup_led(size_t led_index) {
-  SMART_LED & led = *(leds[led_index]);
-
-  String led_index_str = String(led_index);
-
-  // Configure the LED entity attributes
-  static const String NAME_PREFIX = "LED ";
-  led.entity.setIntegrationType(HA_MQTT_LIGHT);
-  led.entity.setName(NAME_PREFIX + led_index_str);
-  led.entity.setCommandTopic( device_identifier + "/led" + led_index_str + "/set");
-  led.entity.setStateTopic(   device_identifier + "/led" + led_index_str + "/state");
-  led.entity.addKeyValue("schema","json");
-  led.entity.addKeyValue("brightness","true");
-  led.entity.setDevice(&this_device); // this also adds the entity to the device and generates a unique_id based on the first identifier of the device.
-  led.entity.setMqttAdaptor(&publish_adaptor);
 }
 
 void setup_mqtt() {
@@ -507,40 +472,7 @@ void mqtt_subscription_callback(const char* topic, const byte* payload, unsigned
     Serial.println();
   }
 
-  // is this a LED command topic ?
-  for(size_t i=0; i<leds_count; i++) {
-    SMART_LED & led = *leds[i];
-
-    if (led.entity.getCommandTopic() == topic) {
-      // Parse json
-      DynamicJsonDocument doc(256);
-      DeserializationError error = deserializeJson(doc, payload, length);
-      if (error) {
-        Serial.print("Failed parsing json payload: ");
-        Serial.println(error.f_str());
-        return;
-      }
-      
-      // Get the key values from json
-      if (!doc.containsKey("state"))
-        return;
-      const char* state = doc["state"];
-      uint8_t brightness = led.state.brightness; // if brightness is not supplied, use current value
-      if (doc.containsKey("brightness"))
-        brightness = doc["brightness"];
-      
-      // Apply command
-      bool turn_on = parse_boolean(state);
-      if (turn_on)
-        led_turn_on(i, brightness);
-      else
-        led_turn_off(i);
-
-      return; // this topic is handled
-    }
-  }
-
-  // is this a MELODY selector command topic ?
+  // is this a MELODY selector command topic?
   if (melody_selector.entity.getCommandTopic() == topic) {
     if (printable) {
       size_t melody_name_index = find_melody_by_name(payload, length);
@@ -553,7 +485,7 @@ void mqtt_subscription_callback(const char* topic, const byte* payload, unsigned
     }
   }
 
-  // is this a TEST button command topic ?
+  // is this a TEST button command topic?
   if (test_button.entity.getCommandTopic() == topic) {
     // Interrupt what ever we are playing.
     if (anyrtttl::nonblocking::isPlaying())
@@ -566,7 +498,7 @@ void mqtt_subscription_callback(const char* topic, const byte* payload, unsigned
     return; // this topic is handled
   }
 
-  // is this the IDENTIFY switch command topic ?
+  // is this the IDENTIFY switch command topic?
   if (identify.entity.getCommandTopic() == topic) {
     // Interrupt what ever we are playing.
     if (anyrtttl::nonblocking::isPlaying())
@@ -592,6 +524,8 @@ void mqtt_subscription_callback(const char* topic, const byte* payload, unsigned
 void mqtt_reconnect() {
   // Loop until we're reconnected
   while (!mqtt_client.connected()) {
+    led_turn_off(&led_online);
+
     Serial.print("Attempting MQTT connection... ");
 
     bool connect_success = false;
@@ -693,6 +627,8 @@ void mqtt_reconnect() {
         delay(DELAY_BETWEEN_MQTT_TRANSACTIONS);
         #endif
       }
+
+      led_turn_on(&led_online);
     }
     
   }
@@ -824,8 +760,10 @@ void setup() {
 
   bell_sensor_reader.begin();
 
-  led0.pin = LED0_PIN;
-  led1.pin = LED1_PIN;
+  led_online.pin = LED0_PIN;
+  led_online.name = "online";
+  led_activity.pin = LED1_PIN;
+  led_activity.name = "activity";
 
   publish_adaptor.setPubSubClient(&mqtt_client);
 
@@ -833,9 +771,8 @@ void setup() {
   
   // Force turn OFF all leds.
   for(size_t i=0; i<leds_count; i++) {
-    SMART_LED & led = *leds[i];
+    LED_STATE & led = *leds[i];
 
-    led.state.brightness = 255;
     led_turn_off(i); // for initializing led's internal variables
   }
 
@@ -864,7 +801,7 @@ void setup() {
 
   // setup a timer to prevent starting a new melody
   timer_force_timed_out(doorbell_ringer_timer);
-  doorbell_ringer_timer.setTimeOutTime(2500);
+  doorbell_ringer_timer.setTimeOutTime(5000);
 
   // setup a timer to prevent playing the identify melody as soon as it ends.
   identify_delay_timer.setTimeOutTime(2500);
@@ -873,6 +810,10 @@ void setup() {
   // setup a timer to compute how long do we force the bell sensor to be ON.
   timer_force_timed_out(test_timer);
   test_timer.setTimeOutTime(200);
+
+  // setup a timer to compute how long do we force the ACTIVITY led to be ON.
+  timer_force_timed_out(led_activity_timer);
+  led_activity_timer.setTimeOutTime(500);
 }
 
 void loop() {
@@ -883,23 +824,36 @@ void loop() {
   }
   mqtt_client.loop();
 
-  // Read DOORBELL pin
+  // Did we waited long enough between each detection?
+  // This prevents sending multiple signals to Home Assistant when one repeatedly press the doorbell.
+  bool allow_new_ring_detections = false;
+  if (doorbell_ringer_timer.hasTimedOut()) {
+    allow_new_ring_detections = true;
+  }
+
+  // Read DOORBELL magnetic field from pin
+  bool magnetic_ring_detected = false;
   if (bell_sensor_reader.toggled()) {
-    if (bell_sensor_reader.read() == Button::PRESSED) {
+    if (bell_sensor_reader.read() == Button::PRESSED && allow_new_ring_detections) {
       bell_sensor.state.detected = true;
     } else {
       bell_sensor.state.detected = false;
     }
-    bell_sensor.entity.setState(bell_sensor.state.detected ? "ON" : "OFF");
+
+    // Only update the MQTT state if the boolean state has actually transitioned.
+    if (bell_sensor.previous.detected != bell_sensor.state.detected) {
+      bell_sensor.entity.setState(bell_sensor.state.detected ? "ON" : "OFF");
+    }
   }
+  bell_sensor.previous = bell_sensor.state; // remember previous state
 
   // Did we pressed the TEST button?
-  if (test_button.previous.is_pressed == false && test_button.state.is_pressed) {
+  if (test_button.previous.is_pressed == false && test_button.state.is_pressed && allow_new_ring_detections) {
     // Force the state of the bell sensor to ON
     bell_sensor.state.detected = true;
     bell_sensor.entity.setState(bell_sensor.state.detected ? "ON" : "OFF");
 
-    // Start a time to stop overriding the bell sensor
+    // Start a timer to stop overriding the bell sensor
     test_timer.reset();
   }
   if (test_button.state.is_pressed && test_timer.hasTimedOut()) {
@@ -911,11 +865,24 @@ void loop() {
   }
   test_button.previous = test_button.state; // remember previous state
 
+  // Did we detected new ACTIVITY during this pass?
+  if (bell_sensor.state.detected && bell_sensor.entity.getState().isDirty()) {
+    doorbell_ringer_timer.reset();  //start counting now to know when is the next time allowed to trigger a ring.
+
+    // Turn the ACTIVITY led on
+    led_turn_on(&led_activity);
+    led_activity_timer.reset(); //start counting now
+  }
+
+  // Should we turn off the ACTIVITY led status?
+  if (led_activity.is_on && led_activity_timer.hasTimedOut()) {
+    led_turn_off(&led_activity);
+  }
+
   // Should we start a doorbell melody?
-  if (bell_sensor.entity.getState().isDirty() &&
-      bell_sensor.state.detected && // do not trigger a melody when button is released 
+  if (bell_sensor.state.detected && // do not trigger a melody when button is released 
+      bell_sensor.entity.getState().isDirty() &&
       melody_selector.state.selected_melody < melodies_array_count &&
-      doorbell_ringer_timer.hasTimedOut() &&
       !anyrtttl::nonblocking::isPlaying())
   {
     const char * selected_melody_buffer = melodies_array[melody_selector.state.selected_melody];
