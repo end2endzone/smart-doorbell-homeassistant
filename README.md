@@ -3,7 +3,7 @@
 
 # smart-doorbell-homeassistant
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Github Releases](https://img.shields.io/github/release/end2endzone/smart-doorbell-homeassistant.svg)](https://github.com/end2endzone/smart-doorbell-homeassistant/releases)
+[![GitHub Tag](https://img.shields.io/github/v/tag/end2endzone/smart-doorbell-homeassistant)](https://github.com/end2endzone/smart-doorbell-homeassistant/tags)
 
 A project to convert a traditional electromagnetic chime doorbell into a smart doorbell compatible with Home Assistant.
 
