@@ -263,6 +263,10 @@ String ip_to_string(const ip_addr_t * ipaddr);
 size_t print_cstr_without_terminating_null(const char* str, size_t length, size_t max_chunk_size);
 void mqtt_subscription_callback(const char* topic, const byte* payload, unsigned int length);
 void mqtt_reconnect();
+void mqtt_publish_entities_dirty_state(size_t max = -1);
+void mqtt_publish_entities_discovery();
+void mqtt_force_publish_entities_state();
+void mqtt_subscribe_all_entities();
 bool parse_boolean(const char * value);
 uint8_t parse_uint8(const char * value);
 String parse_string_without_terminating_null(const uint8_t * buffer, size_t length);
@@ -649,54 +653,14 @@ void mqtt_reconnect() {
       // This will "disable" all entities in Home Assistant while we update.
       this_device.publishMqttDeviceStatus(false);
 
-      // Force all entities to be discovered
-      for(size_t i=0; i<entities_count; i++) {
-        HaMqttEntity & entity = *(entities[i]);
+      // Subscribe to all entities to receive commands from Home Assistant
+      mqtt_subscribe_all_entities();
 
-        // Publish Home Assistant mqtt discovery topic
-        success = false;
-        for(size_t i=0; i<MAX_PUBLISH_RETRY && !success; i++) {
-          success = entity.publishMqttDiscovery();
-          if (!success) {
-            // try to increase the mqtt buffer size and try again.
-            increase_mqtt_buffer();
-          }
-        }
+      // Force publish all entities discovery by Home Assistant.
+      mqtt_publish_entities_discovery();
 
-        // Allow time for Home Assistant to properly 'discover' the previous entity
-        #ifdef DELAY_BETWEEN_MQTT_TRANSACTIONS
-        delay(DELAY_BETWEEN_MQTT_TRANSACTIONS);
-        #endif
-
-        // Subscribe to receive entity state change notifications
-        entity.subscribe();
-      }
-
-      // Allow time for Home Assistant to properly 'discover' the previous entity
-      #ifdef DELAY_BETWEEN_MQTT_TRANSACTIONS
-      delay(DELAY_BETWEEN_MQTT_TRANSACTIONS);
-      #endif
-
-      // Force all entities to be updated
-      for(size_t i=0; i<entities_count; i++) {
-        HaMqttEntity & entity = *(entities[i]);
-
-        // Publish entity's state to initialize Home Assistant UI
-        entity.getState().setDirty();
-        success = false;
-        for(size_t i=0; i<MAX_PUBLISH_RETRY && !success; i++) {
-          success = entity.publishMqttState();
-          if (!success) {
-            // try to increase the mqtt buffer size and try again.
-            increase_mqtt_buffer();
-          }
-        }
-
-        // Allow time for Home Assistant to properly 'discover' the previous entity
-        #ifdef DELAY_BETWEEN_MQTT_TRANSACTIONS
-        delay(DELAY_BETWEEN_MQTT_TRANSACTIONS);
-        #endif
-      }
+      // Force all entities to be published to initialize Home Assistant UI
+      mqtt_force_publish_entities_state();
 
       // Set device as back "online"
       // Home assistant has issue detecting the 'online' state.
@@ -713,6 +677,87 @@ void mqtt_reconnect() {
       online_on_timer.reset();  //start counting now
     }
     
+  }
+}
+
+void mqtt_publish_entities_dirty_state(size_t max) {
+  size_t published_count = 0;
+  for(size_t i=0; i<entities_count; i++) {
+    HaMqttEntity & entity = *(entities[i]);
+
+    // Publish entity's state if dirty to refresh Home Assistant UI
+    if (entity.getState().isDirty()) {
+      bool success = false;
+      for(size_t i=0; i<MAX_PUBLISH_RETRY && !success; i++) {
+        success = entity.publishMqttState();
+        if (!success) {
+          // try to increase the mqtt buffer size and try again.
+          increase_mqtt_buffer();
+        }
+      }
+
+      // Limit publishing max entity state per call.
+      published_count++;
+      if (published_count == max)
+        return;
+
+      // Allow time for Home Assistant to properly 'discover' the previous entity
+      #ifdef DELAY_BETWEEN_MQTT_TRANSACTIONS
+      delay(DELAY_BETWEEN_MQTT_TRANSACTIONS);
+      #endif
+    }
+  }
+}
+
+void mqtt_force_publish_entities_state() {
+  // Set dirty bit to all entities
+  for(size_t i=0; i<entities_count; i++) {
+    HaMqttEntity & entity = *(entities[i]);
+    entity.getState().setDirty();
+  }
+
+  // Publish them all
+  mqtt_publish_entities_dirty_state();
+
+  // Also force publish the device as "online" status.
+  // Home assistant has issue detecting the 'online' state.
+  // Update the status again a few times to prevent this issue as much as possible.
+  for(size_t i=0; i<3; i++) {
+    this_device.publishMqttDeviceStatus(true);
+    
+    #ifdef DELAY_BETWEEN_MQTT_TRANSACTIONS
+    delay(DELAY_BETWEEN_MQTT_TRANSACTIONS);
+    #endif
+  }
+}
+
+void mqtt_publish_entities_discovery() {
+  for(size_t i=0; i<entities_count; i++) {
+    HaMqttEntity & entity = *(entities[i]);
+
+    // Publish Home Assistant mqtt discovery topic
+    bool success = false;
+    for(size_t i=0; i<MAX_PUBLISH_RETRY && !success; i++) {
+      success = entity.publishMqttDiscovery();
+      if (!success) {
+        // try to increase the mqtt buffer size and try again.
+        increase_mqtt_buffer();
+      }
+    }
+
+    // Allow time for Home Assistant to send updates, if any
+    #ifdef DELAY_BETWEEN_MQTT_TRANSACTIONS
+    delay(DELAY_BETWEEN_MQTT_TRANSACTIONS);
+    #endif
+  }
+}
+
+void mqtt_subscribe_all_entities() {
+  for(size_t i=0; i<entities_count; i++) {
+    HaMqttEntity & entity = *(entities[i]);
+
+    // Subscribe to receive entity state change notifications
+    entity.subscribe();
   }
 }
 
@@ -1020,24 +1065,8 @@ void loop() {
     anyrtttl::nonblocking::play();
   }
 
-  // Publish dirty state of all entities
-  for(size_t i=0; i<entities_count; i++) {
-    HaMqttEntity & entity = *(entities[i]);
-    if (entity.getState().isDirty()) {
-
-      bool success = false;
-      for(size_t i=0; i<MAX_PUBLISH_RETRY && !success; i++) {
-        success = entity.publishMqttState();
-        if (!success) {
-          // try to increase the mqtt buffer size and try again.
-          increase_mqtt_buffer();
-        }
-      }
-
-      // Limit publishing 1 entity state per loop.
-      break;
-    }
-  }
+  // Publish a maximum of 1 dirty entity per loop.
+  mqtt_publish_entities_dirty_state(1);
 
   // Remember previous states
   test_button.previous = test_button.state; 
