@@ -347,7 +347,7 @@ void setup_device() {
   this_device.setManufacturer("end2endzone");
   this_device.setModel("ESP8266");
   this_device.setHardwareVersion("1.0");
-  this_device.setSoftwareVersion("0.1");
+  this_device.setSoftwareVersion(__DATE__ " - " __TIME__);
   this_device.setMqttAdaptor(&publish_adaptor);
 
   // Configure DOORBELL entity attributes
