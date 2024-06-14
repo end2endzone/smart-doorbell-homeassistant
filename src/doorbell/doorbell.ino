@@ -127,6 +127,20 @@ HaMqttEntity * entities[] = {
 };
 size_t entities_count = sizeof(entities)/sizeof(entities[0]);
 
+HaMqttEntity * subscribable_entities[] = {
+  &melody_selector.entity,
+  &test_button.entity,
+  &identify.entity,
+};
+size_t subscribable_entities_count = sizeof(subscribable_entities)/sizeof(subscribable_entities[0]);
+
+HaMqttEntity * publishable_entities[] = {
+  &bell_sensor.entity,
+  &melody_selector.entity,
+  &identify.entity,
+};
+size_t publishable_entities_count = sizeof(publishable_entities)/sizeof(publishable_entities[0]);
+
 static const char* melodies_array[] PROGMEM = {
   "None:d=4,o=5,b=900:32p",
   "Beethoven Fifth Symphony:d=4,o=5,b=125:8p,8g5,8g5,8g5,2d#5",
@@ -262,6 +276,8 @@ bool is_digit(const char c);
 bool is_ip_address(const char * value);
 String ip_to_string(const ip_addr_t * ipaddr);
 size_t print_cstr_without_terminating_null(const char* str, size_t length, size_t max_chunk_size);
+bool is_publishable(HaMqttEntity & test_entity);
+bool is_subscribable(HaMqttEntity & test_entity);
 void mqtt_subscription_callback(const char* topic, const byte* payload, unsigned int length);
 void mqtt_reconnect();
 void mqtt_publish_entities_dirty_state(size_t max = -1);
@@ -543,6 +559,26 @@ size_t print_cstr_without_terminating_null(const char* str, size_t length, size_
   return printed_length;
 }
 
+bool is_publishable(HaMqttEntity & test_entity)
+{
+  for(size_t i=0; i<publishable_entities_count; i++) {
+    HaMqttEntity & entity = *(publishable_entities[i]);
+    if (&entity == &test_entity)
+      return true;
+  }
+  return false;
+}
+
+bool is_subscribable(HaMqttEntity & test_entity)
+{
+  for(size_t i=0; i<subscribable_entities_count; i++) {
+    HaMqttEntity & entity = *(subscribable_entities[i]);
+    if (&entity == &test_entity)
+      return true;
+  }
+  return false;
+}
+
 void mqtt_subscription_callback(const char* topic, const byte* payload, unsigned int length) {
   Serial.print("MQTT notify: ");
   Serial.print(length);
@@ -683,8 +719,8 @@ void mqtt_reconnect() {
 
 void mqtt_publish_entities_dirty_state(size_t max) {
   size_t published_count = 0;
-  for(size_t i=0; i<entities_count; i++) {
-    HaMqttEntity & entity = *(entities[i]);
+  for(size_t i=0; i<publishable_entities_count; i++) {
+    HaMqttEntity & entity = *(publishable_entities[i]);
 
     // Publish entity's state if dirty to refresh Home Assistant UI
     if (entity.getState().isDirty()) {
@@ -714,8 +750,8 @@ void mqtt_force_publish_entities_state() {
   Serial.println("Forcing all entities to be published again...");
 
   // Set dirty bit to all entities
-  for(size_t i=0; i<entities_count; i++) {
-    HaMqttEntity & entity = *(entities[i]);
+  for(size_t i=0; i<publishable_entities_count; i++) {
+    HaMqttEntity & entity = *(publishable_entities[i]);
     entity.getState().setDirty();
   }
 
@@ -756,8 +792,8 @@ void mqtt_publish_entities_discovery() {
 }
 
 void mqtt_subscribe_all_entities() {
-  for(size_t i=0; i<entities_count; i++) {
-    HaMqttEntity & entity = *(entities[i]);
+  for(size_t i=0; i<subscribable_entities_count; i++) {
+    HaMqttEntity & entity = *(subscribable_entities[i]);
 
     // Subscribe to receive entity state change notifications
     entity.subscribe();
