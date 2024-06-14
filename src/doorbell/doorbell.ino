@@ -158,6 +158,91 @@ static const size_t melodies_array_count = sizeof(melodies_array) / sizeof(melod
 static const char* melody_names[melodies_array_count] = {0};
 static const size_t INVALID_MELODY_INDEX = (size_t)-1;
 
+/*
+class StateChangeNotifyer
+{
+private:
+  int last_state;
+  const char * name;
+  const char ** states;
+  size_t states_count;
+  SoftTimer unchanged_timer; //millisecond timer to force printing the actual state if not changed for a while
+
+public:
+  StateChangeNotifyer(const char * name, const char** states, size_t states_count) {
+    reset();
+    this->name = name;
+    setStates(states, states_count);
+  }
+  StateChangeNotifyer(const char * name) {
+    reset();
+    this->name = name;
+  }
+  ~StateChangeNotifyer() {}
+
+  void reset() {
+    last_state = 0x123456789;
+    name = "";
+    states == NULL;
+    states_count = 0;
+
+    //setup a timer to show existing state if not changed for a while
+    unchanged_timer.setTimeOutTime(1000);
+    unchanged_timer.reset();
+  }
+
+  void setStates(const char** states, size_t states_count) {
+    this->states = states;
+    this->states_count = states_count;
+  }
+
+  const char * getStateName(size_t index) {
+    // Get the name of the state
+    const char * state_name = "ERROR_UNKNOWN";
+    if (index < states_count) {
+      state_name = states[index];
+    }
+    return state_name;
+  }
+
+  void update(int new_state) {
+    if (new_state != last_state) {
+      // State changed
+
+      // Get the name of the state
+      size_t state_name_index = (size_t)new_state;
+      const char * state_name = getStateName(state_name_index);
+
+      // Output new change
+      Serial.println(String() + "New state: " + name + "=" + state_name);
+
+      // reset timer
+      unchanged_timer.reset();
+    }
+    else {
+      // state is unchanged
+      if (unchanged_timer.hasTimedOut()) {
+        // for too long now
+
+        // Get the name of the state
+        size_t state_name_index = (size_t)new_state;
+        const char * state_name = getStateName(state_name_index);
+
+        // Output existing change
+        Serial.println(String() + name + "=" + state_name + " (still)");
+
+        // reset timer
+        unchanged_timer.reset();
+      }
+    }
+
+    last_state = new_state;
+  }
+};
+const char * connection_states[] = {"disconnected", "connected"};
+StateChangeNotifyer connection_debugger("connection", connection_states, 2);
+*/
+
 //************************************************************
 //   Predeclarations
 //************************************************************
@@ -820,6 +905,9 @@ void setup() {
 }
 
 void loop() {
+  // Should we debug the connection status?
+  //connection_debugger.update((int)mqtt_client.connected());
+
   // make sure mqtt is working
   if (!mqtt_client.connected()) {
     yield();
