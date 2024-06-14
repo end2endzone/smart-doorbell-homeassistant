@@ -1,3 +1,5 @@
-- Create a main function to force publish all entities. Add a timer which refreshes every 5 min.
 - Create a function that "waits" for Home Assistant to be properly connected to the MQTT. The current code only waits for the MQTT server. Publishing to the server before HA is also connected could also result in HA missing updates.
   - Change the implementation of parse_boolean() to also detect "online" as true.
+-Fix the publish a message which we are subcribed to:
+  MQTT publish: topic=doorbell-682E/test/set   payload=
+  MQTT notify: 0 bytes. topic=doorbell-682E/test/set payload=

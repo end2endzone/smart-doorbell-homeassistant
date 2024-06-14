@@ -91,6 +91,7 @@ SoftTimer online_off_timer; //millisecond timer to define how long the ONLINE le
 SoftTimer activity_off_timer; //millisecond timer to automatically turn off the ACTIVITY led.
 SoftTimer doorbell_ring_delay_timer; //millisecond timer, to delay between each doorbell ring
 SoftTimer identify_delay_timer; //millisecond timer, to delay between each play of the identify RTTTL melody.
+SoftTimer force_publish_timer; //millisecond timer, to force republishing all mqtt data.
 
 static const String device_identifier_prefix = "doorbell";
 String device_identifier_postfix;  // matches the last 4 digits of the MAC address
@@ -710,6 +711,8 @@ void mqtt_publish_entities_dirty_state(size_t max) {
 }
 
 void mqtt_force_publish_entities_state() {
+  Serial.println("Forcing all entities to be published again...");
+
   // Set dirty bit to all entities
   for(size_t i=0; i<entities_count; i++) {
     HaMqttEntity & entity = *(entities[i]);
@@ -947,6 +950,10 @@ void setup() {
 
   // Setup a timer to compute how long the ONLINE led should be OFF.
   online_off_timer.setTimeOutTime(4900);
+
+  // Setup a timer to force publishing all entity states every 5 minutes.
+  force_publish_timer.setTimeOutTime(5*60*1000);
+  force_publish_timer.reset();
 }
 
 void loop() {
@@ -959,6 +966,12 @@ void loop() {
     mqtt_reconnect();
   }
   mqtt_client.loop();
+
+  // It is time to force publishing all entities again?
+  if (force_publish_timer.hasTimedOut()) {
+    mqtt_force_publish_entities_state();
+    force_publish_timer.reset(); //start counting now
+  }
 
   // Process the ONLINE led blink update.
   // Should the ONLINE led turn off?
