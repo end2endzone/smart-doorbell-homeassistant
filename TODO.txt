@@ -1,2 +1,5 @@
+- Create a function that "waits" for Home Assistant to be properly connected to the MQTT. The current code only waits for the MQTT server. Publishing to the server before HA is also connected could also result in HA missing updates.
+  - Change the implementation of parse_boolean() to also detect "online" as true.
 - Change the build version timestamp
   - https://forum.arduino.cc/t/can-you-format-__date__/200818/10
+  
