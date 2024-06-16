@@ -13,6 +13,7 @@
 
 #include "arduino_secrets.h"
 
+#include "HaMqttDiscovery/HaMqttDiscovery.hpp"
 #include "HaMqttDiscovery/HaMqttEntity.hpp"
 #include "HaMqttDiscovery/HaMqttDevice.hpp"
 #include "HaMqttDiscovery/MqttAdaptorPubSubClient.hpp"
@@ -92,6 +93,7 @@ SoftTimer activity_off_timer; //millisecond timer to automatically turn off the 
 SoftTimer doorbell_ring_delay_timer; //millisecond timer, to delay between each doorbell ring
 SoftTimer identify_delay_timer; //millisecond timer, to delay between each play of the identify RTTTL melody.
 SoftTimer force_publish_timer; //millisecond timer, to force republishing all mqtt data.
+SoftTimer operation_timer; //millisecond timer, a generic time for timing out during an operation.
 
 static const String device_identifier_prefix = "doorbell";
 String device_identifier_postfix;  // matches the last 4 digits of the MAC address
@@ -119,11 +121,14 @@ SMART_BUTTON test_button;
 SMART_SWITCH identify;
 size_t identify_melody_index = 0;
 
+SMART_SWITCH home_assistant_status;
+
 HaMqttEntity * entities[] = {
   &bell_sensor.entity,
   &melody_selector.entity,
   &test_button.entity,
   &identify.entity,
+  &home_assistant_status.entity,
 };
 size_t entities_count = sizeof(entities)/sizeof(entities[0]);
 
@@ -131,6 +136,7 @@ HaMqttEntity * subscribable_entities[] = {
   &melody_selector.entity,
   &test_button.entity,
   &identify.entity,
+  &home_assistant_status.entity,
 };
 size_t subscribable_entities_count = sizeof(subscribable_entities)/sizeof(subscribable_entities[0]);
 
@@ -280,6 +286,7 @@ bool is_publishable(HaMqttEntity & test_entity);
 bool is_subscribable(HaMqttEntity & test_entity);
 void mqtt_subscription_callback(const char* topic, const byte* payload, unsigned int length);
 void mqtt_reconnect();
+void mqtt_wait_home_assistant_online();
 void mqtt_publish_entities_dirty_state(size_t max = -1);
 void mqtt_publish_entities_discovery();
 void mqtt_force_publish_entities_state();
@@ -489,6 +496,10 @@ void setup_device() {
   identify.entity.addKeyValue("device_class","switch");
   identify.entity.setDevice(&this_device); // this also adds the entity to the device and generates a unique_id based on the first identifier of the device.
   identify.entity.setMqttAdaptor(&publish_adaptor);
+
+  // Setup the minimum for handling an external topic update
+  home_assistant_status.entity.setCommandTopic(ha_discovery_prefix + "/status");
+  home_assistant_status.entity.setMqttAdaptor(&publish_adaptor);
 }
 
 void setup_mqtt() {
@@ -639,6 +650,15 @@ void mqtt_subscription_callback(const char* topic, const byte* payload, unsigned
     return; // this topic is handled
   }
 
+  // Is this Home Assistant status update?
+  if (home_assistant_status.entity.getCommandTopic() == topic) {
+    String value = parse_string_without_terminating_null(payload, length);
+
+    // Parse command
+    home_assistant_status.state.is_on = parse_boolean(value.c_str());
+    return; // this topic is handled
+  }
+
   Serial.print(String(ERROR_MESSAGE_PREFIX) + "MQTT error: unknown topic: ");
   Serial.println(topic);
 }
@@ -690,6 +710,10 @@ void mqtt_reconnect() {
       // This will "disable" all entities in Home Assistant while we update.
       this_device.publishMqttDeviceStatus(false);
 
+      // Wait for Home Assistant "online" status before publishing discovery topics
+      // Timeout if not found.
+      mqtt_wait_home_assistant_online();
+
       // Subscribe to all entities to receive commands from Home Assistant
       mqtt_subscribe_all_entities();
 
@@ -714,6 +738,29 @@ void mqtt_reconnect() {
       online_on_timer.reset();  //start counting now
     }
     
+  }
+}
+
+void mqtt_wait_home_assistant_online() {
+  home_assistant_status.state.is_on = false; // assume offline
+
+  Serial.println("Waiting for Home Assistant 'online' status...");
+
+  // listens for Home Assistant status topic
+  home_assistant_status.entity.subscribe();
+
+  operation_timer.setTimeOutTime(5*60*1000); // 5 min
+  operation_timer.reset(); //start counting now
+  while(home_assistant_status.state.is_on == false && !operation_timer.hasTimedOut()) {
+    yield();
+    delay(100);
+  }
+
+  if (home_assistant_status.state.is_on) {
+    Serial.println("Home Assistant is now online.");
+  }
+  else {
+    Serial.println(String(ERROR_MESSAGE_PREFIX) + "Home Assistant status is unknown!");
   }
 }
 
@@ -814,6 +861,10 @@ bool parse_boolean(const char * value) {
   else if (strcmp("YES", value) == 0)
     return true;
   else if (strcmp("yes", value) == 0)
+    return true;
+  else if (strcmp("ONLINE", value) == 0)
+    return true;
+  else if (strcmp("online", value) == 0)
     return true;
   else if (strcmp("1", value) == 0)
     return true;
