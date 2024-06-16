@@ -259,6 +259,35 @@ const char * connection_states[] = {"disconnected", "connected"};
 StateChangeNotifyer connection_debugger("connection", connection_states, 2);
 */
 
+class ScopeDebugger
+{
+private:
+  String name;
+
+public:
+  ScopeDebugger(const char * name) {
+    this->name = name;
+
+    // Print scope enter message
+    String msg;
+    msg += "<";
+    msg += name;
+    msg += ">";
+    Serial.println(msg);
+  }
+  ~ScopeDebugger() {
+    if (name.isEmpty())
+      return;
+
+    // Print scope leave message
+    String msg;
+    msg += "</";
+    msg += name;
+    msg += ">";
+    Serial.println(msg);
+  }
+};
+
 //************************************************************
 //   Predeclarations
 //************************************************************
@@ -645,6 +674,8 @@ void mqtt_subscription_callback(const char* topic, const byte* payload, unsigned
 }
 
 void mqtt_reconnect() {
+  ScopeDebugger scope_debugger(__FUNCTION__);
+
   // Loop until we're reconnected
   while (!mqtt_client.connected()) {
     led_turn_off(&led_online);
@@ -698,18 +729,8 @@ void mqtt_reconnect() {
       mqtt_publish_entities_discovery();
 
       // Force all entities to be published to initialize Home Assistant UI
+      // This also sets the device as back "online"
       mqtt_force_publish_entities_state();
-
-      // Set device as back "online"
-      // Home assistant has issue detecting the 'online' state.
-      // Update the status again a few times to prevent this issue as much as possible.
-      for(size_t i=0; i<3; i++) {
-        this_device.publishMqttDeviceStatus(true);
-        
-        #ifdef DELAY_BETWEEN_MQTT_TRANSACTIONS
-        delay(DELAY_BETWEEN_MQTT_TRANSACTIONS);
-        #endif
-      }
 
       led_turn_on(&led_online);
       online_on_timer.reset();  //start counting now
@@ -728,7 +749,7 @@ void mqtt_publish_entities_dirty_state(size_t max) {
       bool success = false;
       for(size_t i=0; i<MAX_PUBLISH_RETRY && !success; i++) {
         success = entity.publishMqttState();
-        if (!success) {
+        if (mqtt_client.connected() && !success) {
           // try to increase the mqtt buffer size and try again.
           increase_mqtt_buffer();
         }
@@ -748,6 +769,8 @@ void mqtt_publish_entities_dirty_state(size_t max) {
 }
 
 void mqtt_force_publish_entities_state() {
+  ScopeDebugger scope_debugger(__FUNCTION__);
+
   Serial.println("Forcing all entities to be published again...");
 
   // Set dirty bit to all entities
@@ -772,6 +795,8 @@ void mqtt_force_publish_entities_state() {
 }
 
 void mqtt_publish_entities_discovery() {
+  ScopeDebugger scope_debugger(__FUNCTION__);
+
   for(size_t i=0; i<entities_count; i++) {
     HaMqttEntity & entity = *(entities[i]);
 
@@ -779,7 +804,7 @@ void mqtt_publish_entities_discovery() {
     bool success = false;
     for(size_t i=0; i<MAX_PUBLISH_RETRY && !success; i++) {
       success = entity.publishMqttDiscovery();
-      if (!success) {
+      if (mqtt_client.connected() && !success) {
         // try to increase the mqtt buffer size and try again.
         increase_mqtt_buffer();
       }
@@ -793,6 +818,8 @@ void mqtt_publish_entities_discovery() {
 }
 
 void mqtt_subscribe_all_entities() {
+  ScopeDebugger scope_debugger(__FUNCTION__);
+
   for(size_t i=0; i<subscribable_entities_count; i++) {
     HaMqttEntity & entity = *(subscribable_entities[i]);
 
