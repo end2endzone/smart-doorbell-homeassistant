@@ -324,6 +324,7 @@ void extract_melody_name(const __FlashStringHelper* str, String & name);
 void extract_melody_name(size_t index, String & name);
 void increase_mqtt_buffer(uint16_t new_buffer_size = 0);
 void timer_force_timed_out(SoftTimer & timer);
+String get_pretty_compilation_date();
 
 //************************************************************
 //   Function definitions
@@ -483,7 +484,7 @@ void setup_device() {
   this_device.setManufacturer("end2endzone");
   this_device.setModel("ESP8266");
   this_device.setHardwareVersion("1.0");
-  this_device.setSoftwareVersion(__DATE__ " - " __TIME__);
+  this_device.setSoftwareVersion(get_pretty_compilation_date() + ", " __TIME__);
   this_device.setMqttAdaptor(&publish_adaptor);
 
   // Configure DOORBELL entity attributes
@@ -944,6 +945,59 @@ void timer_force_timed_out(SoftTimer & timer) {
   timer.reset();
   delay(2);
   timer.setTimeOutTime(current_time_out_time);
+}
+
+bool split_string(const char * text, char split_char, String ** elements) {
+  int next_element_index = 0;
+  String * next_str = elements[next_element_index];
+  const char * remain = text;
+
+  while(next_str != NULL && *remain != '\0') {
+    char c = *remain;
+    Serial.print("Processing text letter '");
+    Serial.print(c);
+    Serial.println("'");
+    if (c == split_char) {
+      next_element_index++; // next string accumulator
+      next_str = elements[next_element_index];
+    }
+    else {
+      (*next_str) += c;
+    }
+    remain++; // next character in text
+  }
+
+  if (*remain == '\0')
+    return true;
+  return false;
+}
+
+String get_pretty_compilation_date() {
+  // Converts "Jun 17 2024" to "2024-06-17"
+  String month_str;
+  String date_str;
+  String year_str;
+  String * strings[] = {&month_str, &date_str, &year_str, NULL};
+  String * next_str = strings[0];
+  
+  bool splitted = split_string(__DATE__, ' ', strings);  
+  if (!splitted)
+    return __DATE__;
+
+  if (month_str.isEmpty() || date_str.isEmpty() || year_str.isEmpty() )
+    return __DATE__;
+
+  // month string to month value
+  static const char month_names[] = "JanFebMarAprMayJunJulAugSepOctNovDec";
+  const char * pos_found = strstr(month_names, month_str.c_str());
+  if (pos_found == NULL)
+    return __DATE__;
+  int month_value = (pos_found-month_names)/3 + 1;
+
+  char date_output[32];
+  sprintf(date_output, "%s-%02d-%s", year_str.c_str(), month_value, date_str.c_str());
+
+  return date_output;
 }
 
 void setup() {
