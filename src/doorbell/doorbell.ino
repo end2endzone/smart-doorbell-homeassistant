@@ -82,7 +82,11 @@ struct SMART_BUTTON {
   BUTTON_STATE previous;
 };
 
+#ifdef SECRET_MQTT_SERVER_HOST
+String mqtt_server = SECRET_MQTT_SERVER_HOST;
+#else
 String mqtt_server = SECRET_MQTT_SERVER_IP;
+#endif
 
 WiFiClient wifi_client;
 SoftTimer hello_timer; //millisecond timer to show a LED flashing animation when booting.
